@@ -10,6 +10,7 @@ use App\Models\Transmittal;
 use App\Models\TransmittalItem;
 use App\Models\AuditLog;
 use App\Models\EmailLog;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth;
@@ -38,7 +39,7 @@ class ProjectController extends Controller
         ]);
 
         AuditLog::create([
-            'user_id' => Auth::id(),
+            'user_id' => Auth::id() ?? User::first()?->id,
             'action' => 'PROJECT_CREATED',
             'model_type' => Project::class,
             'model_id' => $project->id,
@@ -121,13 +122,13 @@ class ProjectController extends Controller
                 'original_name' => $originalName,
                 'extension' => $file->getClientOriginalExtension(),
                 'size' => $file->getSize(),
-                'user_id' => Auth::id(),
+                'user_id' => Auth::id() ?? User::first()?->id,
                 'change_notes' => $request->notes,
                 'is_current' => true
             ]);
 
             AuditLog::create([
-                'user_id' => Auth::id(),
+                'user_id' => Auth::id() ?? User::first()?->id,
                 'action' => 'DOCUMENT_REVISED',
                 'model_type' => Project::class,
                 'model_id' => $project->id,
@@ -164,7 +165,7 @@ class ProjectController extends Controller
     public function logView(Request $request, Document $document)
     {
         AuditLog::create([
-            'user_id' => Auth::id(),
+            'user_id' => Auth::id() ?? User::first()?->id,
             'action' => 'DOCUMENT_READ',
             'model_type' => Document::class,
             'model_id' => $document->id,
@@ -233,7 +234,7 @@ class ProjectController extends Controller
 
         EmailLog::create([
             'project_id' => $project->id,
-            'sender_id' => Auth::id(),
+            'sender_id' => Auth::id() ?? User::first()?->id,
             'recipient' => $request->recipient_email,
             'subject' => "Transmittal: {$request->subject} ({$code})",
             'body' => $request->message ?? "Se ha enviado un nuevo transmittal con documentos adjuntos.",
@@ -241,7 +242,7 @@ class ProjectController extends Controller
         ]);
 
         AuditLog::create([
-            'user_id' => Auth::id(),
+            'user_id' => Auth::id() ?? User::first()?->id,
             'action' => 'TRANSMITTAL_SENT',
             'model_type' => Project::class,
             'model_id' => $project->id,
@@ -259,7 +260,7 @@ class ProjectController extends Controller
 
         $note = \App\Models\RevisionNote::create([
             'file_revision_id' => $revision->id,
-            'user_id' => Auth::id(),
+            'user_id' => Auth::id() ?? User::first()?->id,
             'content' => $request->note
         ]);
 

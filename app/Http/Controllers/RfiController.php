@@ -47,7 +47,7 @@ class RfiController extends Controller
 
         $rfi = Rfi::create([
             'project_id' => $project->id,
-            'creator_id' => Auth::id(),
+            'creator_id' => Auth::id() ?? User::first()?->id,
             'assigned_to_id' => $request->assigned_to_id,
             'number' => $rfiNumber,
             'subject' => $request->subject,
@@ -75,7 +75,7 @@ class RfiController extends Controller
             // Log Email
             EmailLog::create([
                 'project_id' => $project->id,
-                'sender_id' => Auth::id(),
+                'sender_id' => Auth::id() ?? User::first()?->id,
                 'recipient' => $rfi->assignedTo->email,
                 'subject' => "Nuevo RFI: {$rfi->number} - {$rfi->subject}",
                 'body' => "Se ha creado un nuevo RFI y se le ha asignado.",
@@ -84,7 +84,7 @@ class RfiController extends Controller
         }
 
         AuditLog::create([
-            'user_id' => Auth::id(),
+            'user_id' => Auth::id() ?? User::first()?->id,
             'action' => 'RFI_CREATED',
             'model_type' => Rfi::class,
             'model_id' => $rfi->id,
@@ -110,7 +110,7 @@ class RfiController extends Controller
 
         $response = RfiResponse::create([
             'rfi_id' => $rfi->id,
-            'user_id' => Auth::id(),
+            'user_id' => Auth::id() ?? User::first()?->id,
             'message' => $request->message
         ]);
 
@@ -136,7 +136,7 @@ class RfiController extends Controller
             
             EmailLog::create([
                 'project_id' => $rfi->project_id,
-                'sender_id' => Auth::id(),
+                'sender_id' => Auth::id() ?? User::first()?->id,
                 'recipient' => $user->email,
                 'subject' => "Respuesta a RFI: {$rfi->number}",
                 'body' => $request->message,
@@ -145,7 +145,7 @@ class RfiController extends Controller
         }
 
         AuditLog::create([
-            'user_id' => Auth::id(),
+            'user_id' => Auth::id() ?? User::first()?->id,
             'action' => 'RFI_RESPONDED',
             'model_type' => Rfi::class,
             'model_id' => $rfi->id,
@@ -162,7 +162,7 @@ class RfiController extends Controller
         $rfi->update(['status' => $request->status]);
 
         AuditLog::create([
-            'user_id' => Auth::id(),
+            'user_id' => Auth::id() ?? User::first()?->id,
             'action' => 'RFI_STATUS_UPDATED',
             'model_type' => Rfi::class,
             'model_id' => $rfi->id,
