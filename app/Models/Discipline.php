@@ -13,6 +13,11 @@ class Discipline extends Model
         return $this->hasMany(Document::class);
     }
 
+    public function folders()
+    {
+        return $this->hasMany(Folder::class);
+    }
+
     public function projects()
     {
         return $this->belongsToMany(Project::class);

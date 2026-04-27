@@ -9,6 +9,7 @@ class Document extends Model
     protected $fillable = [
         'project_id',
         'discipline_id',
+        'folder_id',
         'document_number',
         'title',
         'status',
@@ -53,6 +54,11 @@ class Document extends Model
     public function discipline()
     {
         return $this->belongsTo(Discipline::class);
+    }
+
+    public function folder()
+    {
+        return $this->belongsTo(Folder::class);
     }
 
     public function revisions()

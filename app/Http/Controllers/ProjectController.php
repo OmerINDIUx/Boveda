@@ -97,6 +97,7 @@ class ProjectController extends Controller
 
     public function show(Request $request, Project $project)
     {
+        $project->load(['folders', 'disciplines.folders']);
         $disciplines = $project->disciplines;
         if ($disciplines->isEmpty()) {
             $all = Discipline::all();
@@ -119,8 +120,9 @@ class ProjectController extends Controller
             ->get();
 
         $workflows = $project->approvalWorkflows;
+        $folders = $project->folders()->whereNull('parent_id')->with('children')->get();
 
-        return view('projects.show', compact('project', 'disciplines', 'allDisciplines', 'documents', 'auditLogs', 'workflows'));
+        return view('projects.show', compact('project', 'disciplines', 'allDisciplines', 'documents', 'auditLogs', 'workflows', 'folders'));
     }
 
     public function upload(Request $request, Project $project)
@@ -130,6 +132,7 @@ class ProjectController extends Controller
                 'file' => 'required|file',
                 'title' => 'required|string',
                 'discipline_id' => 'required|exists:disciplines,id',
+                'folder_id' => 'nullable|exists:folders,id',
                 'document_number' => 'required|string',
                 'revision_code' => 'required|string',
                 'status' => 'required|string',
@@ -146,6 +149,7 @@ class ProjectController extends Controller
                 ['project_id' => $project->id, 'document_number' => $docNum],
                 [
                     'discipline_id' => $request->discipline_id,
+                    'folder_id' => $request->folder_id,
                     'title' => $request->title,
                     'status' => 'ACTIVO',
                     'confidentiality_level' => $request->confidentiality_level ?? 'public'

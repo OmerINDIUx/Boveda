@@ -39,6 +39,10 @@ Route::get('/disciplines', [\App\Http\Controllers\DisciplineController::class, '
 Route::post('/disciplines', [\App\Http\Controllers\DisciplineController::class, 'store'])->name('disciplines.store');
 Route::delete('/disciplines/{discipline}', [\App\Http\Controllers\DisciplineController::class, 'destroy'])->name('disciplines.destroy');
 
+// Folders
+Route::post('/projects/{project}/folders', [\App\Http\Controllers\FolderController::class, 'store'])->name('projects.folders.store');
+Route::post('/documents/{document}/move', [\App\Http\Controllers\FolderController::class, 'moveDocument'])->name('documents.move');
+
 // Dashboard and Analytics
 Route::get('/projects/{project}/dashboard', [ProjectController::class, 'dashboard'])->name('projects.dashboard');
 

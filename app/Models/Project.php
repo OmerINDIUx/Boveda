@@ -21,6 +21,11 @@ class Project extends Model
         return $this->belongsToMany(Discipline::class);
     }
 
+    public function folders()
+    {
+        return $this->hasMany(Folder::class);
+    }
+
     public function rfis()
     {
         return $this->hasMany(Rfi::class);

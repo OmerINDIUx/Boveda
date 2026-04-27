@@ -27,6 +27,12 @@
     .color-swatch.active { border-color: #333; transform: scale(1.1); }
     .btn-tool { background: transparent; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 1.1rem; transition: all 0.2s; display: flex; align-items: center; justify-content: center; }
     .btn-tool.active { background: #eef2ff; color: var(--primary); transform: scale(1.1); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    
+    /* Drag and Drop Styles */
+    .doc-row[draggable="true"] { cursor: grab; transition: transform 0.1s; }
+    .doc-row[draggable="true"]:active { cursor: grabbing; transform: scale(0.98); opacity: 0.8; }
+    .folder-item.drag-over { background: var(--primary) !important; color: white !important; transform: scale(1.05); }
+    .folder-item.drag-over svg { stroke: white !important; }
 </style>
 
 <div class="control-layout" style="display: grid; grid-template-columns: 240px 1fr; height: calc(100vh - 4rem); gap: 1.5rem;">
@@ -55,14 +61,32 @@
 
             <div style="margin-top: 1rem;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; padding-left: 0.75rem; padding-right: 0.5rem;">
-                    <p style="font-size: 0.6rem; font-weight: 800; color: #94a3b8; margin: 0;">DISCIPLINAS</p>
+                    <p style="font-size: 0.6rem; font-weight: 800; color: #94a3b8; margin: 0;">DISCIPLINAS Y CARPETAS</p>
                     <button onclick="document.getElementById('disciplineModal').style.display='flex'" style="background: transparent; border: none; color: var(--primary); font-size: 1rem; cursor: pointer; font-weight: bold; line-height: 1;">+</button>
                 </div>
+                
                 @foreach($disciplines as $disc)
-                <a href="#" onclick="filterDiscipline('{{ $disc->name }}', this)" class="folder-item" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; border-radius: 8px; text-decoration: none; color: var(--text-main); font-size: 0.8rem; font-weight: 600; transition: all 0.2s;">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12l20 0"></path><path d="M12 2l0 20"></path></svg>
-                    {{ $disc->name }}
-                </a>
+                <div class="discipline-group" style="margin-bottom: 0.5rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <a href="#" onclick="filterDiscipline('{{ $disc->name }}', this)" class="folder-item" style="flex: 1; display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; border-radius: 8px; text-decoration: none; color: var(--text-main); font-size: 0.8rem; font-weight: 800; transition: all 0.2s;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12l20 0"></path><path d="M12 2l0 20"></path></svg>
+                            {{ $disc->name }}
+                        </a>
+                        <button onclick="openFolderModalForDiscipline('{{ $disc->id }}', '{{ $disc->name }}')" style="background: transparent; border: none; color: #94a3b8; font-size: 0.8rem; cursor: pointer; padding: 0 0.5rem;">+</button>
+                    </div>
+                    
+                    <div class="discipline-folders" style="padding-left: 1.5rem; display: flex; flex-direction: column; gap: 0.15rem;">
+                        @foreach($disc->folders as $folder)
+                        <a href="#" onclick="filterByFolder('{{ $folder->id }}', this)" 
+                           class="folder-item drop-zone" 
+                           data-folder-id="{{ $folder->id }}"
+                           style="display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.5rem; border-radius: 6px; text-decoration: none; color: var(--text-muted); font-size: 0.75rem; font-weight: 600; transition: all 0.2s;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                            {{ $folder->name }}
+                        </a>
+                        @endforeach
+                    </div>
+                </div>
                 @endforeach
             </div>
         </div>
@@ -99,7 +123,14 @@
                     
                     @foreach($documents as $doc)
                     @php $v = $doc->latestRevision; @endphp
-                    <div class="doc-row" data-discipline="{{ $doc->discipline->name }}" style="grid-template-columns: 40px 140px 2fr 120px 80px 120px;" onclick="openUltraTraceabilityPanel('{{ $doc->id }}', '{{ $doc->title }}', '{{ $doc->document_number }}', '{{ $v->revision_code ?? '-' }}', '{{ $v->status ?? '-' }}', '{{ $doc->discipline->name }}', '{{ $v ? $v->created_at->format('d/m/Y H:i') : '-' }}', '{{ $v ? asset('storage/'.$v->file_path) : '' }}')">
+                    <div class="doc-row" 
+                         draggable="true" 
+                         data-doc-id="{{ $doc->id }}"
+                         data-discipline="{{ $doc->discipline->name }}" 
+                         data-folder-id="{{ $doc->folder_id ?? '' }}"
+                         style="grid-template-columns: 40px 140px 2fr 120px 80px 120px;" 
+                         onclick="openUltraTraceabilityPanel('{{ $doc->id }}', '{{ $doc->title }}', '{{ $doc->document_number }}', '{{ $v->revision_code ?? '-' }}', '{{ $v->status ?? '-' }}', '{{ $doc->discipline->name }}', '{{ $v ? $v->created_at->format('d/m/Y H:i') : '-' }}', '{{ $v ? asset('storage/'.$v->file_path) : '' }}')"
+                         ondragstart="onDragStart(event)">
                         <div style="text-align: center;" onclick="event.stopPropagation()"><input type="checkbox" name="document_ids[]" value="{{ $doc->id }}" onchange="updateBulkUI()"></div>
                         <div style="font-family: monospace; color: var(--primary); font-weight: 700;">
                             @if($doc->is_locked)<span style="color:#ef4444;" title="Bloqueado por aprobación">🔒</span>@endif
@@ -221,8 +252,27 @@
 
 <div id="panelOverlay" class="panel-overlay" onclick="closePanel()"></div>
 
-<!-- Transmittal Modal & Upload Modal (Simplified for brevity, kept from previous) -->
-<div id="transmittalModal" class="modal-overlay" style="display: none;">
+<div id="folderModal" class="modal-overlay" style="display: none;">
+    <div class="glass-card" style="width: 100%; max-width: 400px; padding: 2rem;">
+        <h2 style="font-size: 1.25rem; margin-bottom: 0.25rem;">Nueva Carpeta</h2>
+        <p id="disciplineFolderLabel" style="font-size: 0.75rem; color: var(--primary); font-weight: 800; margin-bottom: 1.5rem; text-transform: uppercase;">-</p>
+        
+        <form action="{{ route('projects.folders.store', $project->id) }}" method="POST">
+            @csrf
+            <input type="hidden" name="discipline_id" id="modalDisciplineId">
+            <div style="display: flex; flex-direction: column; gap: 1rem;">
+                <input type="text" name="name" class="modal-input" placeholder="Nombre de la carpeta (Ej: Planos de Corte)" required>
+                
+                <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1rem;">
+                    <button type="button" class="btn-modern" style="background: transparent;" onclick="document.getElementById('folderModal').style.display='none'">CANCELAR</button>
+                    <button type="submit" class="btn-modern">CREAR CARPETA</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Transmittal Modal -->
     <div class="glass-card" style="width: 90%; max-width: 1200px; padding: 3rem;">
         <h2 style="font-size: 1.5rem; margin-bottom: 1rem;">Protocolo de Transmittal</h2>
         <form id="transmittalForm" action="{{ route('projects.transmittals.send', $project->id) }}" method="POST">
@@ -317,6 +367,15 @@
                         <input type="text" name="title" class="modal-input" placeholder="Ej: Plano de Cimentación General" required>
                     </div>
                     <div>
+                        <label class="input-label">Ubicación (Carpeta)</label>
+                        <select name="folder_id" class="modal-input">
+                            <option value="">Raíz</option>
+                            @foreach($folders as $f)
+                                <option value="{{ $f->id }}">{{ $f->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
                         <label class="input-label">Disciplina / Especialidad</label>
                         <select name="discipline_id" class="modal-input" required>
                             <option value="" disabled selected>Selecciona una disciplina...</option>
@@ -400,29 +459,110 @@
     }
     function filterDiscipline(discipline, element) {
         event.preventDefault();
-        
-        // Update active class
+        resetActiveFilters();
+        element.classList.add('active');
+        element.style.background = '#eef2ff';
+        element.style.color = 'var(--primary)';
+
+        const rows = document.querySelectorAll('.doc-row[data-discipline]');
+        rows.forEach(row => {
+            if (discipline === 'all' || row.getAttribute('data-discipline') === discipline) {
+                row.style.display = 'grid';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+    }
+
+    function filterByFolder(folderId, element) {
+        event.preventDefault();
+        resetActiveFilters();
+        element.classList.add('active');
+        element.style.background = '#eef2ff';
+        element.style.color = 'var(--primary)';
+
+        const rows = document.querySelectorAll('.doc-row[data-discipline]');
+        rows.forEach(row => {
+            if (row.getAttribute('data-folder-id') === folderId) {
+                row.style.display = 'grid';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+    }
+
+    function openFolderModalForDiscipline(id, name) {
+        document.getElementById('modalDisciplineId').value = id;
+        document.getElementById('disciplineFolderLabel').innerText = `DENTRO DE: ${name}`;
+        document.getElementById('folderModal').style.display = 'flex';
+    }
+
+    function resetActiveFilters() {
         const nav = document.getElementById('disciplineFilterNav');
         if (nav) {
             const items = nav.querySelectorAll('.folder-item');
             items.forEach(el => {
                 el.classList.remove('active');
                 el.style.background = 'transparent';
-                el.style.color = 'var(--text-main)';
+                // If it's a sub-folder (font-size 0.75rem), use muted, else main
+                el.style.color = el.style.fontSize === '0.75rem' ? 'var(--text-muted)' : 'var(--text-main)';
             });
         }
-        
-        element.classList.add('active');
-        element.style.background = '#eef2ff';
-        element.style.color = 'var(--primary)';
+    }
 
-        // Filter rows
-        const rows = document.querySelectorAll('.doc-row[data-discipline]');
-        rows.forEach(row => {
-            if (discipline === 'all' || row.getAttribute('data-discipline') === discipline) {
-                row.style.display = 'grid'; // because it uses grid-template-columns
-            } else {
-                row.style.display = 'none';
+    // DRAG AND DROP
+    function onDragStart(event) {
+        event.dataTransfer.setData("docId", event.currentTarget.getAttribute("data-doc-id"));
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const dropZones = document.querySelectorAll('.drop-zone');
+        
+        dropZones.forEach(zone => {
+            zone.ondragover = (e) => {
+                e.preventDefault();
+                zone.classList.add('drag-over');
+            };
+            
+            zone.ondragleave = () => {
+                zone.classList.remove('drag-over');
+            };
+            
+            zone.ondrop = (e) => {
+                e.preventDefault();
+                zone.classList.remove('drag-over');
+                const docId = e.dataTransfer.getData("docId");
+                const folderId = zone.getAttribute("data-folder-id");
+                
+                if (docId && folderId) {
+                    moveDocument(docId, folderId);
+                }
+            };
+        });
+    });
+
+    function moveDocument(docId, folderId) {
+        fetch(`/documents/${docId}/move`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            },
+            body: JSON.stringify({ folder_id: folderId })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                // Update UI: update attribute and optionally show success toast
+                const row = document.querySelector(`.doc-row[data-doc-id="${docId}"]`);
+                if (row) row.setAttribute('data-folder-id', folderId);
+                
+                // Show toast or notification (optional)
+                console.log(`Documento ${docId} movido a carpeta ${folderId}`);
+                
+                // If currently filtering by that folder or another, we might want to refresh the view
+                // For now, just a visual feedback is enough.
+                alert('Documento movido con éxito.');
             }
         });
     }
