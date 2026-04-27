@@ -98,7 +98,13 @@
                     @php $v = $doc->latestRevision; @endphp
                     <div class="doc-row" style="grid-template-columns: 40px 140px 2fr 120px 80px 120px;" onclick="openUltraTraceabilityPanel('{{ $doc->id }}', '{{ $doc->title }}', '{{ $doc->document_number }}', '{{ $v->revision_code ?? '-' }}', '{{ $v->status ?? '-' }}', '{{ $doc->discipline->name }}', '{{ $v ? $v->created_at->format('d/m/Y H:i') : '-' }}', '{{ $v ? asset('storage/'.$v->file_path) : '' }}')">
                         <div style="text-align: center;" onclick="event.stopPropagation()"><input type="checkbox" name="document_ids[]" value="{{ $doc->id }}" onchange="updateBulkUI()"></div>
-                        <div style="font-weight: 800; color: var(--primary); font-size: 0.75rem;">{{ $doc->document_number }}</div>
+                        <div style="font-family: monospace; color: var(--primary); font-weight: 700;">
+                            @if($doc->is_locked)<span style="color:#ef4444;" title="Bloqueado por aprobación">🔒</span>@endif
+                            @if($doc->confidentiality_level === 'internal')<span style="color:#eab308; margin-right:4px;" title="Interno">🛡️</span>@endif
+                            @if($doc->confidentiality_level === 'restricted')<span style="color:#f97316; margin-right:4px;" title="Restringido">⚠️</span>@endif
+                            @if($doc->confidentiality_level === 'confidential')<span style="color:#dc2626; margin-right:4px;" title="Confidencial">🛑</span>@endif
+                            {{ $doc->document_number }}
+                        </div>
                         <div>
                             <div style="font-weight: 700; color: #1e293b;">{{ $doc->title }}</div>
                             <div style="font-size: 0.65rem; color: var(--text-muted);">{{ $v->original_name ?? 'N/A' }}</div>
@@ -232,41 +238,164 @@
     </div>
 </div>
 
-<div id="uploadModal" class="modal-overlay" style="display: none;">
-    <div class="glass-card" style="width: 90%; max-width: 1200px; padding: 3rem;">
-        <h2 style="font-size: 1.5rem; margin-bottom: 1.5rem;">Nueva Revisión Documental</h2>
+<div id="uploadModal" class="modal-overlay" style="display: none; align-items: center; justify-content: center;">
+    <style>
+        .modal-input {
+            width: 100%;
+            padding: 0.85rem 1.2rem;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: #f8fafc;
+            font-size: 0.85rem;
+            color: var(--text-main);
+            transition: all 0.2s ease;
+            box-sizing: border-box;
+        }
+        .modal-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+            background: white;
+        }
+        .file-dropzone {
+            border: 2px dashed #cbd5e1;
+            border-radius: 16px;
+            padding: 2.5rem 1.5rem;
+            text-align: center;
+            background: #f8fafc;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            position: relative;
+        }
+        .file-dropzone:hover {
+            border-color: var(--primary);
+            background: #eef2ff;
+        }
+        .file-dropzone input[type="file"] {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            opacity: 0; cursor: pointer;
+        }
+        .input-label {
+            font-size: 0.7rem;
+            font-weight: 800;
+            color: #64748b;
+            margin-bottom: 0.5rem;
+            display: block;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .modal-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+    </style>
+    <div class="glass-card" style="width: 100%; max-width: 900px; padding: 2.5rem; border-radius: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.2);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 1.5rem;">
+            <div>
+                <h2 style="font-size: 1.5rem; font-weight: 800; color: var(--text-main); letter-spacing: -0.5px;">Nueva Carga Documental</h2>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">Registra y clasifica un nuevo documento en la bóveda central.</p>
+            </div>
+            <button type="button" onclick="document.getElementById('uploadModal').style.display='none'" style="background: #f1f5f9; border: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; color: #64748b; font-weight: bold; transition: background 0.2s;">✕</button>
+        </div>
+
         <form action="{{ route('projects.upload', $project->id) }}" method="POST" enctype="multipart/form-data">
             @csrf
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
-                    <div style="display: flex; flex-direction: column; gap: 1rem;">
-                        <label style="font-size: 0.65rem; font-weight: 800; color: #64748b;">DATOS GENERALES</label>
-                        <input type="text" name="title" class="search-bar" placeholder="Título del Documento" required>
-                        <input type="text" name="document_number" class="search-bar" placeholder="ID Técnico (Ej: GAMI-001)" required>
-                        <select name="discipline_id" class="search-bar" required>
+            <div class="modal-grid">
+                <!-- Columna Izquierda: Datos del Documento -->
+                <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+                    <div>
+                        <label class="input-label">Identificador Técnico</label>
+                        <input type="text" name="document_number" class="modal-input" placeholder="Ej: GAMI-ARQ-001" required>
+                    </div>
+                    <div>
+                        <label class="input-label">Título del Documento</label>
+                        <input type="text" name="title" class="modal-input" placeholder="Ej: Plano de Cimentación General" required>
+                    </div>
+                    <div>
+                        <label class="input-label">Disciplina / Especialidad</label>
+                        <select name="discipline_id" class="modal-input" required>
+                            <option value="" disabled selected>Selecciona una disciplina...</option>
                             @foreach($disciplines as $disc)
                                 <option value="{{ $disc->id }}">{{ $disc->prefix }} - {{ $disc->name }}</option>
                             @endforeach
                         </select>
                     </div>
-                    <div style="display: flex; flex-direction: column; gap: 1rem;">
-                        <label style="font-size: 0.65rem; font-weight: 800; color: #64748b;">REVISIÓN Y ARCHIVO</label>
-                        <input type="text" name="revision_code" class="search-bar" placeholder="Revisión (Ej: 0, 1, A)" required>
-                        <select name="status" class="search-bar">
-                            <option value="Draft">Draft</option>
-                            <option value="For Review">For Review</option>
-                            <option value="Approved">Approved</option>
-                        </select>
-                        <input type="file" name="file" class="search-bar" required>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div>
+                            <label class="input-label">Revisión Actual</label>
+                            <input type="text" name="revision_code" class="modal-input" placeholder="Ej: 0, 1, A" required>
+                        </div>
+                        <div>
+                            <label class="input-label">Estado</label>
+                            <select name="status" class="modal-input">
+                                <option value="Draft">Borrador (Draft)</option>
+                                <option value="For Review">Para Revisión</option>
+                                <option value="Approved">Aprobado</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
-                <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1.5rem;">
-                    <button type="button" class="btn-modern" style="background: transparent;" onclick="document.getElementById('uploadModal').style.display='none'">CANCELAR</button>
-                    <button type="submit" class="btn-modern">REGISTRAR</button>
+
+                <!-- Columna Derecha: Seguridad y Archivo -->
+                <div style="display: flex; flex-direction: column; justify-content: space-between;">
+                    <div style="margin-bottom: 1.5rem;">
+                        <label class="input-label">Nivel de Confidencialidad</label>
+                        <div style="position: relative;">
+                            <select name="confidentiality_level" class="modal-input" style="appearance: none; padding-left: 2.5rem;">
+                                <option value="public">Público (Visible para todos)</option>
+                                <option value="internal">Interno (Solo GAMI/INDI)</option>
+                                <option value="restricted">Restringido (Solo Gerencia)</option>
+                                <option value="confidential">Confidencial (Alta Dirección)</option>
+                            </select>
+                            <div style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); pointer-events: none; font-size: 1rem;">
+                                🛡️
+                            </div>
+                        </div>
+                        <p style="font-size: 0.7rem; color: #94a3b8; margin-top: 0.5rem;">Afecta quién puede visualizar o descargar este documento en el visor.</p>
+                    </div>
+
+                    <div style="flex-grow: 1;">
+                        <label class="input-label">Archivo PDF a procesar</label>
+                        <div class="file-dropzone" id="dropzoneArea">
+                            <input type="file" name="file" id="fileInput" accept="application/pdf" required onchange="updateFileName(this)">
+                            <div style="margin-bottom: 0.75rem; color: var(--primary);">
+                                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin: 0 auto;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+                            </div>
+                            <p style="font-size: 0.9rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.25rem;">Arrastra tu PDF aquí o haz clic para explorar</p>
+                            <p id="fileNameDisplay" style="font-size: 0.75rem; color: #64748b;">Máximo 50MB. Solo formato .pdf</p>
+                        </div>
+                    </div>
                 </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border);">
+                <button type="button" class="btn-modern" style="background: transparent; color: #64748b; box-shadow: none;" onclick="document.getElementById('uploadModal').style.display='none'">CANCELAR</button>
+                <button type="submit" class="btn-modern" style="padding: 0.8rem 2rem; font-size: 0.85rem; background: var(--primary);">REGISTRAR DOCUMENTO</button>
             </div>
         </form>
     </div>
 </div>
+<script>
+    function updateFileName(input) {
+        const display = document.getElementById('fileNameDisplay');
+        const dropzone = document.getElementById('dropzoneArea');
+        if (input.files && input.files.length > 0) {
+            display.textContent = 'Archivo seleccionado: ' + input.files[0].name;
+            display.style.color = 'var(--primary)';
+            display.style.fontWeight = 'bold';
+            dropzone.style.borderColor = 'var(--primary)';
+            dropzone.style.background = '#eef2ff';
+        } else {
+            display.textContent = 'Máximo 50MB. Solo formato .pdf';
+            display.style.color = '#64748b';
+            display.style.fontWeight = 'normal';
+            dropzone.style.borderColor = '#cbd5e1';
+            dropzone.style.background = '#f8fafc';
+        }
+    }
+</script>
 
 @endsection
 

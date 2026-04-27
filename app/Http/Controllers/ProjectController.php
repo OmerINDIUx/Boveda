@@ -95,12 +95,14 @@ class ProjectController extends Controller
         return redirect()->route('projects.show', $project->id)->with('success', 'Proyecto inicializado con éxito.');
     }
 
-    public function show(Project $project)
+    public function show(Request $request, Project $project)
     {
         $disciplines = Discipline::all();
         
         // Robust Document Register
+        $user = $request->user() ?: User::first(); // Fallback for dev without auth middleware
         $documents = Document::where('project_id', $project->id)
+            ->visibleTo($user)
             ->with(['discipline', 'latestRevision'])
             ->get();
 
@@ -125,7 +127,8 @@ class ProjectController extends Controller
                 'document_number' => 'required|string',
                 'revision_code' => 'required|string',
                 'status' => 'required|string',
-                'notes' => 'nullable|string'
+                'notes' => 'nullable|string',
+                'confidentiality_level' => 'nullable|string|in:public,internal,restricted,confidential'
             ]);
 
             $file = $request->file('file');
@@ -138,9 +141,16 @@ class ProjectController extends Controller
                 [
                     'discipline_id' => $request->discipline_id,
                     'title' => $request->title,
-                    'status' => 'ACTIVO'
+                    'status' => 'ACTIVO',
+                    'confidentiality_level' => $request->confidentiality_level ?? 'public'
                 ]
             );
+
+            // Update confidentiality if changed
+            if ($request->has('confidentiality_level') && $document->confidentiality_level !== $request->confidentiality_level) {
+                $document->confidentiality_level = $request->confidentiality_level;
+                $document->save();
+            }
 
             if ($document->is_locked) {
                 return back()->withErrors(['upload_error' => 'El documento está BLOQUEADO por un proceso de aprobación activo.'])->withInput();
