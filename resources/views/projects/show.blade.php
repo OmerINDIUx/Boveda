@@ -35,8 +35,8 @@
     <aside class="glass-card" style="padding: 1.5rem; height: 100%; overflow-y: auto;">
         <h3 style="font-size: 0.7rem; font-weight: 800; color: var(--text-muted); margin-bottom: 1.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Explorador de Proyecto</h3>
         
-        <div class="folder-tree" style="display: flex; flex-direction: column; gap: 0.5rem;">
-            <a href="#" class="folder-item active" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.75rem; border-radius: 8px; text-decoration: none; color: var(--primary); background: #eef2ff; font-weight: 700; font-size: 0.85rem;">
+        <div class="folder-tree" style="display: flex; flex-direction: column; gap: 0.5rem;" id="disciplineFilterNav">
+            <a href="#" onclick="filterDiscipline('all', this)" class="folder-item active" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.75rem; border-radius: 8px; text-decoration: none; color: var(--primary); background: #eef2ff; font-weight: 700; font-size: 0.85rem;">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
                 Todos los Docs
             </a>
@@ -54,9 +54,12 @@
             </div>
 
             <div style="margin-top: 1rem;">
-                <p style="font-size: 0.6rem; font-weight: 800; color: #94a3b8; margin-bottom: 0.75rem; padding-left: 0.75rem;">DISCIPLINAS</p>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; padding-left: 0.75rem; padding-right: 0.5rem;">
+                    <p style="font-size: 0.6rem; font-weight: 800; color: #94a3b8; margin: 0;">DISCIPLINAS</p>
+                    <button onclick="document.getElementById('disciplineModal').style.display='flex'" style="background: transparent; border: none; color: var(--primary); font-size: 1rem; cursor: pointer; font-weight: bold; line-height: 1;">+</button>
+                </div>
                 @foreach($disciplines as $disc)
-                <a href="#" class="folder-item" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; border-radius: 8px; text-decoration: none; color: var(--text-main); font-size: 0.8rem; font-weight: 600; transition: all 0.2s;">
+                <a href="#" onclick="filterDiscipline('{{ $disc->name }}', this)" class="folder-item" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; border-radius: 8px; text-decoration: none; color: var(--text-main); font-size: 0.8rem; font-weight: 600; transition: all 0.2s;">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12l20 0"></path><path d="M12 2l0 20"></path></svg>
                     {{ $disc->name }}
                 </a>
@@ -96,7 +99,7 @@
                     
                     @foreach($documents as $doc)
                     @php $v = $doc->latestRevision; @endphp
-                    <div class="doc-row" style="grid-template-columns: 40px 140px 2fr 120px 80px 120px;" onclick="openUltraTraceabilityPanel('{{ $doc->id }}', '{{ $doc->title }}', '{{ $doc->document_number }}', '{{ $v->revision_code ?? '-' }}', '{{ $v->status ?? '-' }}', '{{ $doc->discipline->name }}', '{{ $v ? $v->created_at->format('d/m/Y H:i') : '-' }}', '{{ $v ? asset('storage/'.$v->file_path) : '' }}')">
+                    <div class="doc-row" data-discipline="{{ $doc->discipline->name }}" style="grid-template-columns: 40px 140px 2fr 120px 80px 120px;" onclick="openUltraTraceabilityPanel('{{ $doc->id }}', '{{ $doc->title }}', '{{ $doc->document_number }}', '{{ $v->revision_code ?? '-' }}', '{{ $v->status ?? '-' }}', '{{ $doc->discipline->name }}', '{{ $v ? $v->created_at->format('d/m/Y H:i') : '-' }}', '{{ $v ? asset('storage/'.$v->file_path) : '' }}')">
                         <div style="text-align: center;" onclick="event.stopPropagation()"><input type="checkbox" name="document_ids[]" value="{{ $doc->id }}" onchange="updateBulkUI()"></div>
                         <div style="font-family: monospace; color: var(--primary); font-weight: 700;">
                             @if($doc->is_locked)<span style="color:#ef4444;" title="Bloqueado por aprobación">🔒</span>@endif
@@ -394,6 +397,34 @@
             dropzone.style.borderColor = '#cbd5e1';
             dropzone.style.background = '#f8fafc';
         }
+    }
+    function filterDiscipline(discipline, element) {
+        event.preventDefault();
+        
+        // Update active class
+        const nav = document.getElementById('disciplineFilterNav');
+        if (nav) {
+            const items = nav.querySelectorAll('.folder-item');
+            items.forEach(el => {
+                el.classList.remove('active');
+                el.style.background = 'transparent';
+                el.style.color = 'var(--text-main)';
+            });
+        }
+        
+        element.classList.add('active');
+        element.style.background = '#eef2ff';
+        element.style.color = 'var(--primary)';
+
+        // Filter rows
+        const rows = document.querySelectorAll('.doc-row[data-discipline]');
+        rows.forEach(row => {
+            if (discipline === 'all' || row.getAttribute('data-discipline') === discipline) {
+                row.style.display = 'grid'; // because it uses grid-template-columns
+            } else {
+                row.style.display = 'none';
+            }
+        });
     }
 </script>
 
@@ -992,4 +1023,37 @@
         pageNum = 1;
     }
 </script>
+
+<!-- Discipline Modal -->
+<div id="disciplineModal" class="modal-overlay" style="display: none; align-items: center; justify-content: center; z-index: 2000;">
+    <div class="glass-card" style="width: 100%; max-width: 500px; padding: 2.5rem; border-radius: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.2);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 1.5rem;">
+            <div>
+                <h2 style="font-size: 1.25rem; font-weight: 800; color: var(--text-main); letter-spacing: -0.5px;">Nueva Disciplina</h2>
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem;">Agrega una disciplina exclusiva para este proyecto.</p>
+            </div>
+            <button type="button" onclick="document.getElementById('disciplineModal').style.display='none'" style="background: #f1f5f9; border: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; color: #64748b; font-weight: bold; transition: background 0.2s;">✕</button>
+        </div>
+
+        <form action="{{ route('projects.disciplines.store', $project->id) }}" method="POST">
+            @csrf
+            <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+                <div>
+                    <label style="font-size: 0.7rem; font-weight: 800; color: #64748b; margin-bottom: 0.5rem; display: block;">Nombre de la Disciplina</label>
+                    <input type="text" name="name" style="width: 100%; padding: 0.85rem 1.2rem; border-radius: 12px; border: 1px solid var(--border); background: #f8fafc; font-size: 0.85rem; box-sizing: border-box;" placeholder="Ej: Topografía Especial" required>
+                </div>
+                <div>
+                    <label style="font-size: 0.7rem; font-weight: 800; color: #64748b; margin-bottom: 0.5rem; display: block;">Prefijo (Para Códigos)</label>
+                    <input type="text" name="prefix" style="width: 100%; padding: 0.85rem 1.2rem; border-radius: 12px; border: 1px solid var(--border); background: #f8fafc; font-size: 0.85rem; box-sizing: border-box;" placeholder="Ej: TOP" maxlength="10" required>
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border);">
+                <button type="button" class="btn-modern" style="background: transparent; color: #64748b; box-shadow: none;" onclick="document.getElementById('disciplineModal').style.display='none'">CANCELAR</button>
+                <button type="submit" class="btn-modern" style="padding: 0.8rem 2rem; font-size: 0.85rem; background: var(--primary);">GUARDAR</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 @endsection

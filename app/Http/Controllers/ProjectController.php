@@ -97,7 +97,7 @@ class ProjectController extends Controller
 
     public function show(Request $request, Project $project)
     {
-        $disciplines = Discipline::all();
+        $disciplines = Discipline::whereNull('project_id')->orWhere('project_id', $project->id)->get();
         
         // Robust Document Register
         $user = $request->user() ?: User::first(); // Fallback for dev without auth middleware
@@ -350,5 +350,20 @@ class ProjectController extends Controller
             'status' => 'success',
             'is_resolved' => $note->is_resolved
         ]);
+    }
+    public function storeDiscipline(Request $request, Project $project)
+    {
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'prefix' => 'required|string|max:10'
+        ]);
+
+        Discipline::create([
+            'name' => $request->name,
+            'prefix' => $request->prefix,
+            'project_id' => $project->id
+        ]);
+
+        return back()->with('success', 'Disciplina agregada al proyecto.');
     }
 }

@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Discipline extends Model
 {
-    protected $fillable = ['name', 'prefix'];
+    protected $fillable = ['name', 'prefix', 'project_id'];
 
     public function documents()
     {
