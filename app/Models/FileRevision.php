@@ -23,4 +23,9 @@ class FileRevision extends Model
     {
         return $this->belongsTo(Document::class);
     }
+
+    public function notes()
+    {
+        return $this->hasMany(RevisionNote::class)->latest();
+    }
 }

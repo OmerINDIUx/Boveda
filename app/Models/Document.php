@@ -11,7 +11,9 @@ class Document extends Model
         'discipline_id',
         'document_number',
         'title',
-        'status'
+        'status',
+        'is_locked',
+        'approval_status'
     ];
 
     public function project()

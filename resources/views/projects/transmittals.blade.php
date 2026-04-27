@@ -39,9 +39,12 @@
             </div>
             <div style="font-size: 0.8rem; font-weight: 600;">{{ $trans->created_at->format('d/m/Y H:i') }}</div>
             <div style="text-align: center;">
-                <span style="background: #eef2ff; color: var(--primary); padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 800; font-size: 0.7rem;">
+                <span style="background: #eef2ff; color: var(--primary); padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 800; font-size: 0.7rem; margin-right: 5px;">
                     {{ $trans->items->count() }}
                 </span>
+                <a href="{{ route('transmittals.download', $trans->id) }}" title="Descargar PDF Oficial" style="color: #ef4444;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                </a>
             </div>
         </div>
         @endforeach

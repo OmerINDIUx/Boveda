@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
-class ProjectController extends Controller
+class ProjectController extends Controller 
 {
     public function index()
     {
@@ -93,6 +93,10 @@ class ProjectController extends Controller
                 ]
             );
 
+            if ($document->is_locked) {
+                return back()->withErrors(['upload_error' => 'El documento está BLOQUEADO por un proceso de aprobación activo.'])->withInput();
+            }
+
             // 2. Mark previous revisions as NOT current
             FileRevision::where('document_id', $document->id)->update(['is_current' => false]);
 
@@ -101,7 +105,7 @@ class ProjectController extends Controller
             $fileName = $docNum . "_REV_" . $request->revision_code . "." . $file->getClientOriginalExtension();
             $storagePath = "projects/{$project->id}/{$discipline->prefix}/{$fileName}";
             
-            $stored = Storage::putFileAs("projects/{$project->id}/{$discipline->prefix}", $file, $fileName);
+            $stored = Storage::disk('public')->putFileAs("projects/{$project->id}/{$discipline->prefix}", $file, $fileName);
 
             if (!$stored) {
                 throw new \Exception("Error al guardar el archivo físico en Storage.");
@@ -140,7 +144,7 @@ class ProjectController extends Controller
 
     public function history(Document $document)
     {
-        $revisions = $document->revisions()->with('document')->latest()->get();
+        $revisions = $document->revisions()->with(['document', 'notes.user'])->latest()->get();
         
         // Also get audit logs for this specific document
         $auditLogs = AuditLog::where(function($query) use ($document) {
@@ -150,6 +154,7 @@ class ProjectController extends Controller
         })->latest()->get();
 
         return response()->json([
+            'document' => $document,
             'revisions' => $revisions,
             'audit' => $auditLogs
         ]);
@@ -167,6 +172,17 @@ class ProjectController extends Controller
         ]);
 
         return response()->json(['status' => 'success']);
+    }
+
+    public function toggleLock(Document $document)
+    {
+        $document->is_locked = !$document->is_locked;
+        $document->save();
+
+        return response()->json([
+            'status' => 'success',
+            'is_locked' => $document->is_locked
+        ]);
     }
 
     public function transmittals(Project $project)
@@ -224,5 +240,47 @@ class ProjectController extends Controller
         ]);
 
         return back()->with('success', "Transmittal {$code} enviado con éxito.");
+    }
+    public function addRevisionNote(Request $request, FileRevision $revision)
+    {
+        $request->validate([
+            'note' => 'required|string'
+        ]);
+
+        $note = \App\Models\RevisionNote::create([
+            'file_revision_id' => $revision->id,
+            'user_id' => Auth::id(),
+            'content' => $request->note
+        ]);
+
+        return response()->json([
+            'status' => 'success',
+            'note' => $note->load('user')
+        ]);
+    }
+
+    public function updateRevisionNote(Request $request, \App\Models\RevisionNote $note)
+    {
+        $request->validate([
+            'content' => 'required|string'
+        ]);
+
+        $note->update(['content' => $request->content]);
+
+        return response()->json([
+            'status' => 'success',
+            'note' => $note->load('user')
+        ]);
+    }
+
+    public function toggleResolveNote(\App\Models\RevisionNote $note)
+    {
+        $note->is_resolved = !$note->is_resolved;
+        $note->save();
+
+        return response()->json([
+            'status' => 'success',
+            'is_resolved' => $note->is_resolved
+        ]);
     }
 }
