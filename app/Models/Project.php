@@ -16,6 +16,11 @@ class Project extends Model
         return $this->hasMany(Document::class);
     }
 
+    public function disciplines()
+    {
+        return $this->belongsToMany(Discipline::class);
+    }
+
     public function rfis()
     {
         return $this->hasMany(Rfi::class);

@@ -34,6 +34,11 @@ Route::get('/projects/{project}/mailbox/{email}', [\App\Http\Controllers\Project
 Route::get('/users', [\App\Http\Controllers\UserController::class, 'index'])->name('users.index');
 Route::post('/users', [\App\Http\Controllers\UserController::class, 'store'])->name('users.store');
 
+// Global Disciplines Catalog
+Route::get('/disciplines', [\App\Http\Controllers\DisciplineController::class, 'index'])->name('disciplines.index');
+Route::post('/disciplines', [\App\Http\Controllers\DisciplineController::class, 'store'])->name('disciplines.store');
+Route::delete('/disciplines/{discipline}', [\App\Http\Controllers\DisciplineController::class, 'destroy'])->name('disciplines.destroy');
+
 // Dashboard and Analytics
 Route::get('/projects/{project}/dashboard', [ProjectController::class, 'dashboard'])->name('projects.dashboard');
 

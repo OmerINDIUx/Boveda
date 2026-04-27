@@ -97,7 +97,13 @@ class ProjectController extends Controller
 
     public function show(Request $request, Project $project)
     {
-        $disciplines = Discipline::whereNull('project_id')->orWhere('project_id', $project->id)->get();
+        $disciplines = $project->disciplines;
+        if ($disciplines->isEmpty()) {
+            $all = Discipline::all();
+            $project->disciplines()->sync($all->pluck('id'));
+            $disciplines = $all;
+        }
+        $allDisciplines = Discipline::all();
         
         // Robust Document Register
         $user = $request->user() ?: User::first(); // Fallback for dev without auth middleware
@@ -114,7 +120,7 @@ class ProjectController extends Controller
 
         $workflows = $project->approvalWorkflows;
 
-        return view('projects.show', compact('project', 'disciplines', 'documents', 'auditLogs', 'workflows'));
+        return view('projects.show', compact('project', 'disciplines', 'allDisciplines', 'documents', 'auditLogs', 'workflows'));
     }
 
     public function upload(Request $request, Project $project)
@@ -358,11 +364,12 @@ class ProjectController extends Controller
             'prefix' => 'required|string|max:10'
         ]);
 
-        Discipline::create([
-            'name' => $request->name,
-            'prefix' => $request->prefix,
-            'project_id' => $project->id
-        ]);
+        $discipline = Discipline::firstOrCreate(
+            ['name' => $request->name],
+            ['prefix' => $request->prefix]
+        );
+
+        $project->disciplines()->syncWithoutDetaching([$discipline->id]);
 
         return back()->with('success', 'Disciplina agregada al proyecto.');
     }

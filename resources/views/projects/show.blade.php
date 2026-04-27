@@ -1040,13 +1040,29 @@
             <div style="display: flex; flex-direction: column; gap: 1.25rem;">
                 <div>
                     <label style="font-size: 0.7rem; font-weight: 800; color: #64748b; margin-bottom: 0.5rem; display: block;">Nombre de la Disciplina</label>
-                    <input type="text" name="name" style="width: 100%; padding: 0.85rem 1.2rem; border-radius: 12px; border: 1px solid var(--border); background: #f8fafc; font-size: 0.85rem; box-sizing: border-box;" placeholder="Ej: Topografía Especial" required>
+                    <input type="text" name="name" id="disc_name_input" list="global_disciplines" oninput="checkGlobalPrefix(this.value)" style="width: 100%; padding: 0.85rem 1.2rem; border-radius: 12px; border: 1px solid var(--border); background: #f8fafc; font-size: 0.85rem; box-sizing: border-box;" placeholder="Busca o escribe una disciplina..." required>
+                    <datalist id="global_disciplines">
+                        @foreach($allDisciplines as $gDisc)
+                            <option value="{{ $gDisc->name }}" data-prefix="{{ $gDisc->prefix }}">
+                        @endforeach
+                    </datalist>
                 </div>
                 <div>
                     <label style="font-size: 0.7rem; font-weight: 800; color: #64748b; margin-bottom: 0.5rem; display: block;">Prefijo (Para Códigos)</label>
-                    <input type="text" name="prefix" style="width: 100%; padding: 0.85rem 1.2rem; border-radius: 12px; border: 1px solid var(--border); background: #f8fafc; font-size: 0.85rem; box-sizing: border-box;" placeholder="Ej: TOP" maxlength="10" required>
+                    <input type="text" name="prefix" id="disc_prefix_input" style="width: 100%; padding: 0.85rem 1.2rem; border-radius: 12px; border: 1px solid var(--border); background: #f8fafc; font-size: 0.85rem; box-sizing: border-box;" placeholder="Ej: TOP" maxlength="10" required>
                 </div>
             </div>
+            <script>
+                function checkGlobalPrefix(val) {
+                    const options = document.querySelectorAll('#global_disciplines option');
+                    const prefixInput = document.getElementById('disc_prefix_input');
+                    options.forEach(opt => {
+                        if (opt.value === val) {
+                            prefixInput.value = opt.getAttribute('data-prefix');
+                        }
+                    });
+                }
+            </script>
 
             <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border);">
                 <button type="button" class="btn-modern" style="background: transparent; color: #64748b; box-shadow: none;" onclick="document.getElementById('disciplineModal').style.display='none'">CANCELAR</button>
