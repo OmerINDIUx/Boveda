@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ProjectController;
+use Illuminate\Support\Facades\Route;
 
 Route::get('/', [ProjectController::class, 'index'])->name('projects.index');
 Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store');
@@ -15,4 +16,15 @@ Route::post('/revisions/{revision}/note', [ProjectController::class, 'addRevisio
 Route::post('/notes/{note}/update', [ProjectController::class, 'updateRevisionNote'])->name('notes.update');
 Route::post('/notes/{note}/toggle-resolve', [ProjectController::class, 'toggleResolveNote'])->name('notes.toggle-resolve');
 Route::get('/transmittals/{transmittal}/download', [\App\Http\Controllers\TransmittalPDFController::class, 'download'])->name('transmittals.download');
+
+// RFI Routes
+Route::get('/projects/{project}/rfis', [\App\Http\Controllers\RfiController::class, 'index'])->name('projects.rfis');
+Route::post('/projects/{project}/rfis', [\App\Http\Controllers\RfiController::class, 'store'])->name('projects.rfis.store');
+Route::get('/rfis/{rfi}', [\App\Http\Controllers\RfiController::class, 'show'])->name('rfis.show');
+Route::post('/rfis/{rfi}/responses', [\App\Http\Controllers\RfiController::class, 'addResponse'])->name('rfis.responses.store');
+Route::patch('/rfis/{rfi}/status', [\App\Http\Controllers\RfiController::class, 'updateStatus'])->name('rfis.update-status');
+
+// Project Mailbox
+Route::get('/projects/{project}/mailbox', [\App\Http\Controllers\ProjectMailboxController::class, 'index'])->name('projects.mailbox');
+Route::get('/projects/{project}/mailbox/{email}', [\App\Http\Controllers\ProjectMailboxController::class, 'show'])->name('projects.mailbox.show');
 

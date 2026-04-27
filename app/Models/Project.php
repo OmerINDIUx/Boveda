@@ -16,6 +16,16 @@ class Project extends Model
         return $this->hasMany(Document::class);
     }
 
+    public function rfis()
+    {
+        return $this->hasMany(Rfi::class);
+    }
+
+    public function emailLogs()
+    {
+        return $this->hasMany(EmailLog::class);
+    }
+
     public function getComplianceStatusAttribute()
     {
         // For now, return green if there is at least one document, else red/yellow

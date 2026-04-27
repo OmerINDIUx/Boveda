@@ -42,6 +42,18 @@
             </a>
             
             <div style="margin-top: 1rem;">
+                <p style="font-size: 0.6rem; font-weight: 800; color: #94a3b8; margin-bottom: 0.75rem; padding-left: 0.75rem;">COMUNICACIÓN</p>
+                <a href="{{ route('projects.rfis', $project->id) }}" class="folder-item" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; border-radius: 8px; text-decoration: none; color: var(--text-main); font-size: 0.8rem; font-weight: 600; transition: all 0.2s;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                    RFIs (Consultas)
+                </a>
+                <a href="{{ route('projects.mailbox', $project->id) }}" class="folder-item" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; border-radius: 8px; text-decoration: none; color: var(--text-main); font-size: 0.8rem; font-weight: 600; transition: all 0.2s;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                    Buzón de Proyecto
+                </a>
+            </div>
+
+            <div style="margin-top: 1rem;">
                 <p style="font-size: 0.6rem; font-weight: 800; color: #94a3b8; margin-bottom: 0.75rem; padding-left: 0.75rem;">DISCIPLINAS</p>
                 @foreach($disciplines as $disc)
                 <a href="#" class="folder-item" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; border-radius: 8px; text-decoration: none; color: var(--text-main); font-size: 0.8rem; font-weight: 600; transition: all 0.2s;">

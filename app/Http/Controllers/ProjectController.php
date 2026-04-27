@@ -9,6 +9,7 @@ use App\Models\Discipline;
 use App\Models\Transmittal;
 use App\Models\TransmittalItem;
 use App\Models\AuditLog;
+use App\Models\EmailLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth;
@@ -229,6 +230,15 @@ class ProjectController extends Controller
                 ]);
             }
         }
+
+        EmailLog::create([
+            'project_id' => $project->id,
+            'sender_id' => Auth::id(),
+            'recipient' => $request->recipient_email,
+            'subject' => "Transmittal: {$request->subject} ({$code})",
+            'body' => $request->message ?? "Se ha enviado un nuevo transmittal con documentos adjuntos.",
+            'type' => 'TRANSMITTAL'
+        ]);
 
         AuditLog::create([
             'user_id' => Auth::id(),
