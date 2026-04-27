@@ -28,4 +28,9 @@ class FileRevision extends Model
     {
         return $this->hasMany(RevisionNote::class)->latest();
     }
+
+    public function approvalRequests()
+    {
+        return $this->hasMany(ApprovalRequest::class);
+    }
 }

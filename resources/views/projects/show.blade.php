@@ -73,6 +73,8 @@
                 <p style="color: var(--text-muted); font-size: 0.8rem; font-weight: 600;">CENTRO DE CONTROL DOCUMENTAL • {{ $project->code }}</p>
             </div>
             <div style="display: flex; gap: 0.75rem;">
+                <a href="{{ route('projects.dashboard', $project->id) }}" class="btn-modern" style="background: white; border: 1px solid var(--border); color: var(--text-main); box-shadow: none;">Dashboard</a>
+                <a href="{{ route('projects.workflows', $project->id) }}" class="btn-modern" style="background: white; border: 1px solid var(--border); color: var(--text-main); box-shadow: none;">Flujos de Aprobación</a>
                 <a href="{{ route('projects.transmittals', $project->id) }}" class="btn-modern" style="background: white; border: 1px solid var(--border); color: var(--text-main); box-shadow: none;">Historial Transmittals</a>
                 <button class="btn-modern" onclick="document.getElementById('uploadModal').style.display='flex'">+ Nueva Carga</button>
                 <button id="btnTransmittal" class="btn-modern" style="background: var(--accent); display: none;" onclick="openTransmittalModal()">Transmitir Selección</button>
@@ -675,6 +677,46 @@
                                     Subido el ${new Date(v.created_at).toLocaleString('es-MX', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'})}
                                 </div>
                             </div>
+                        </div>
+
+                        </div>
+                        
+                        <!-- Approval Engine UI -->
+                        <div style="background: #f8fafc; border-radius: 12px; padding: 1rem; margin-bottom: 1rem; border: 1px solid #e2e8f0;">
+                            <h5 style="font-size: 0.7rem; font-weight: 800; color: #64748b; margin-bottom: 0.75rem; text-transform: uppercase;">Motor de Aprobaciones</h5>
+                            ${(v.approval_requests && v.approval_requests.length > 0) ? v.approval_requests.map(req => `
+                                <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <div style="font-size: 0.8rem; font-weight: 700; color: var(--text-main);">${req.workflow ? req.workflow.name : 'Flujo Desconocido'}</div>
+                                        <span class="status-pill pill-${req.status === 'aprobado' ? 'approved' : (req.status === 'rechazado' ? 'draft' : 'review')}">${req.status.toUpperCase()}</span>
+                                    </div>
+                                    ${req.status === 'en_revision' && req.current_step ? `
+                                        <div style="font-size: 0.75rem; color: var(--text-muted);">Esperando revisión de: <strong>${req.current_step.user ? req.current_step.user.name : 'Usuario asignado'}</strong> (Paso ${req.current_step.order})</div>
+                                        <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                                            <form action="/approval-requests/${req.id}/review" method="POST" style="display: flex; gap: 0.5rem; width: 100%;">
+                                                <input type="hidden" name="_token" value="${document.querySelector('meta[name="csrf-token"]').content}">
+                                                <input type="text" name="comments" placeholder="Comentarios opcionales..." style="flex: 1; border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem; font-size: 0.7rem;">
+                                                <button type="submit" name="status" value="aprobado" class="btn-modern" style="padding: 0.4rem 0.8rem; font-size: 0.7rem; background: #10b981;">Aprobar</button>
+                                                <button type="submit" name="status" value="aprobado_comentarios" class="btn-modern" style="padding: 0.4rem 0.8rem; font-size: 0.7rem; background: #f59e0b;">Apr. C/Coment</button>
+                                                <button type="submit" name="status" value="rechazado" class="btn-modern" style="padding: 0.4rem 0.8rem; font-size: 0.7rem; background: #ef4444;">Rechazar</button>
+                                            </form>
+                                        </div>
+                                    ` : `
+                                        <div style="font-size: 0.75rem; color: var(--text-muted);">Flujo completado o cerrado.</div>
+                                    `}
+                                </div>
+                            `).join('') : `
+                                <form action="/revisions/${v.id}/request-approval" method="POST" style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <input type="hidden" name="_token" value="${document.querySelector('meta[name="csrf-token"]').content}">
+                                    <select name="approval_workflow_id" class="search-bar" style="flex: 1; padding: 0.4rem; font-size: 0.75rem;" required>
+                                        <option value="">Seleccione un flujo de aprobación...</option>
+                                        @foreach($workflows as $wf)
+                                            <option value="{{ $wf->id }}">{{ $wf->name }}</option>
+                                        @endforeach
+                                    </select>
+                                    <button type="submit" class="btn-modern" style="padding: 0.4rem 1rem; font-size: 0.75rem;">Iniciar Flujo</button>
+                                </form>
+                            `}
                         </div>
 
                         <!-- Notes List -->

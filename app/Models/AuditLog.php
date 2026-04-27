@@ -14,4 +14,9 @@ class AuditLog extends Model
         'details',
         'ip_address'
     ];
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
 }

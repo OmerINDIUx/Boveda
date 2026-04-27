@@ -25,6 +25,51 @@ class ProjectController extends Controller
         return view('projects.index', compact('projects'));
     }
 
+    public function dashboard(Project $project)
+    {
+        // KPIs for RFIs
+        $rfiStats = [
+            'open' => $project->rfis()->where('status', 'open')->count(),
+            'closed' => $project->rfis()->where('status', 'closed')->count(),
+            'pending' => $project->rfis()->where('status', 'pending')->count(),
+        ];
+
+        // S-Curve data (Cumulative documents created over time)
+        // Grouping documents by date
+        $docsByDate = Document::where('project_id', $project->id)
+            ->orderBy('created_at')
+            ->get()
+            ->groupBy(function($val) {
+                return \Carbon\Carbon::parse($val->created_at)->format('Y-m-d');
+            });
+
+        $sCurveLabels = [];
+        $sCurveData = [];
+        $cumulative = 0;
+
+        foreach($docsByDate as $date => $docs) {
+            $sCurveLabels[] = $date;
+            $cumulative += $docs->count();
+            $sCurveData[] = $cumulative;
+        }
+
+        // Extended Audit Trail (Read tracking)
+        $documentIds = Document::where('project_id', $project->id)->pluck('id');
+        $readAudits = AuditLog::where('action', 'DOCUMENT_READ')
+            ->where('model_type', Document::class)
+            ->whereIn('model_id', $documentIds)
+            ->with('user') // We don't have user relation on AuditLog yet, we should probably add it or use user_id directly
+            ->latest()
+            ->take(50)
+            ->get();
+
+        // Get users explicitly for the read audits
+        $userIds = $readAudits->pluck('user_id')->filter()->unique();
+        $users = User::whereIn('id', $userIds)->get()->keyBy('id');
+
+        return view('projects.dashboard', compact('project', 'rfiStats', 'sCurveLabels', 'sCurveData', 'readAudits', 'users'));
+    }
+
     public function store(Request $request)
     {
         $request->validate([
@@ -65,7 +110,9 @@ class ProjectController extends Controller
             ->take(10)
             ->get();
 
-        return view('projects.show', compact('project', 'disciplines', 'documents', 'auditLogs'));
+        $workflows = $project->approvalWorkflows;
+
+        return view('projects.show', compact('project', 'disciplines', 'documents', 'auditLogs', 'workflows'));
     }
 
     public function upload(Request $request, Project $project)
@@ -146,7 +193,7 @@ class ProjectController extends Controller
 
     public function history(Document $document)
     {
-        $revisions = $document->revisions()->with(['document', 'notes.user'])->latest()->get();
+        $revisions = $document->revisions()->with(['document', 'notes.user', 'approvalRequests.currentStep.user', 'approvalRequests.workflow.steps'])->latest()->get();
         
         // Also get audit logs for this specific document
         $auditLogs = AuditLog::where(function($query) use ($document) {

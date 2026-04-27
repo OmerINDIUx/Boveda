@@ -33,3 +33,16 @@ Route::get('/projects/{project}/mailbox/{email}', [\App\Http\Controllers\Project
 Route::get('/users', [\App\Http\Controllers\UserController::class, 'index'])->name('users.index');
 Route::post('/users', [\App\Http\Controllers\UserController::class, 'store'])->name('users.store');
 
+// Dashboard and Analytics
+Route::get('/projects/{project}/dashboard', [ProjectController::class, 'dashboard'])->name('projects.dashboard');
+
+// Approval Workflows
+Route::get('/projects/{project}/workflows', [\App\Http\Controllers\ApprovalWorkflowController::class, 'index'])->name('projects.workflows');
+Route::post('/projects/{project}/workflows', [\App\Http\Controllers\ApprovalWorkflowController::class, 'store'])->name('projects.workflows.store');
+Route::put('/workflows/{workflow}', [\App\Http\Controllers\ApprovalWorkflowController::class, 'update'])->name('workflows.update');
+Route::delete('/workflows/{workflow}', [\App\Http\Controllers\ApprovalWorkflowController::class, 'destroy'])->name('workflows.destroy');
+
+// Approval Execution
+Route::post('/revisions/{revision}/request-approval', [\App\Http\Controllers\ApprovalRequestController::class, 'store'])->name('revisions.request-approval');
+Route::post('/approval-requests/{approval_request}/review', [\App\Http\Controllers\ApprovalRequestController::class, 'review'])->name('approval.review');
+
