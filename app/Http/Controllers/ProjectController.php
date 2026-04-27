@@ -58,7 +58,7 @@ class ProjectController extends Controller
         $readAudits = AuditLog::where('action', 'DOCUMENT_READ')
             ->where('model_type', Document::class)
             ->whereIn('model_id', $documentIds)
-            ->with('user') // We don't have user relation on AuditLog yet, we should probably add it or use user_id directly
+            ->with('user')
             ->latest()
             ->take(50)
             ->get();

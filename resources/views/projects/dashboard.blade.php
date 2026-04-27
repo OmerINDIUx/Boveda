@@ -36,7 +36,9 @@
     <!-- S-Curve Chart -->
     <div class="glass-card">
         <h3 style="font-size: 1.1rem; font-weight: 800; color: var(--text-main); margin-bottom: 1.5rem;">Curva S de Avance Documental</h3>
-        <canvas id="sCurveChart" style="width: 100%; height: 300px;"></canvas>
+        <div style="position: relative; height: 300px; width: 100%;">
+            <canvas id="sCurveChart"></canvas>
+        </div>
     </div>
 
     <!-- Extended Audit Trail -->
