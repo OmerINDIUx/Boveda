@@ -54,7 +54,7 @@
 </div>
 
 <!-- Modal -->
-<div id="newProjectModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 2000; justify-content: center; align-items: center; background: rgba(15, 23, 42, 0.1);">
+<div id="newProjectModal" class="panel-overlay" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 2000; justify-content: center; align-items: center; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(8px);">
     <div class="glass-card" style="width: 500px; padding: 2.5rem; border: none; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);">
         <h2 style="font-size: 1.5rem; margin-bottom: 0.5rem; color: #0f172a;">Nuevo Proyecto</h2>
         <p style="color: var(--text-muted); margin-bottom: 2rem; font-size: 0.875rem; font-weight: 500;">Ingresa los datos para registrar el proyecto en la bóveda.</p>

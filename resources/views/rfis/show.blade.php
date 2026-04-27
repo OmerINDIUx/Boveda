@@ -18,7 +18,7 @@
         <form action="{{ route('rfis.update-status', $rfi->id) }}" method="POST">
             @csrf
             @method('PATCH')
-            <select name="status" onchange="this.form.submit()" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 0.8rem 1.5rem; color: white; font-weight: 700; cursor: pointer;">
+            <select name="status" onchange="this.form.submit()" style="background: white; border: 1px solid var(--border); border-radius: 12px; padding: 0.8rem 1.5rem; color: var(--text-main); font-weight: 700; cursor: pointer; outline: none;">
                 <option value="open" {{ $rfi->status == 'open' ? 'selected' : '' }}>Marcar como Abierto</option>
                 <option value="pending" {{ $rfi->status == 'pending' ? 'selected' : '' }}>Marcar como Pendiente</option>
                 <option value="closed" {{ $rfi->status == 'closed' ? 'selected' : '' }}>Cerrar RFI</option>
@@ -43,7 +43,7 @@
                 <div style="font-size: 0.75rem; font-weight: 800; text-transform: uppercase; color: var(--text-muted);">Emisión Original</div>
             </div>
             
-            <div style="line-height: 1.6; color: rgba(255,255,255,0.9); margin-bottom: 2rem;">
+            <div style="line-height: 1.6; color: var(--text-main); margin-bottom: 2rem;">
                 {!! nl2br(e($rfi->description)) !!}
             </div>
 
@@ -75,7 +75,7 @@
                 </div>
             </div>
             
-            <div style="line-height: 1.6; color: rgba(255,255,255,0.9); margin-bottom: 1.5rem;">
+            <div style="line-height: 1.6; color: var(--text-main); margin-bottom: 1.5rem;">
                 {!! nl2br(e($response->message)) !!}
             </div>
 
@@ -98,7 +98,7 @@
             <h3 style="margin-bottom: 1.5rem; font-weight: 800;">Agregar Respuesta</h3>
             <form action="{{ route('rfis.responses.store', $rfi->id) }}" method="POST" enctype="multipart/form-data">
                 @csrf
-                <textarea name="message" rows="5" placeholder="Escriba su respuesta técnica aquí..." required style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 1rem; color: white; resize: none; margin-bottom: 1.5rem;"></textarea>
+                <textarea name="message" rows="5" placeholder="Escriba su respuesta técnica aquí..." required style="width: 100%; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1rem; color: var(--text-main); resize: none; margin-bottom: 1.5rem; outline: none;" onfocus="this.style.borderColor='var(--primary)'; this.style.background='white'"></textarea>
                 
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <input type="file" name="attachments[]" multiple style="font-size: 0.8rem; color: var(--text-muted);">
@@ -121,7 +121,7 @@
                 </div>
                 <div>
                     <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 0.2rem;">Prioridad</div>
-                    <div style="font-weight: 600; color: {{ $rfi->priority == 'urgent' ? '#ef4444' : 'white' }}">{{ strtoupper($rfi->priority) }}</div>
+                    <div style="font-weight: 600; color: {{ $rfi->priority == 'urgent' ? '#ef4444' : 'var(--text-main)' }}">{{ strtoupper($rfi->priority) }}</div>
                 </div>
                 <div>
                     <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 0.2rem;">Fecha Límite</div>

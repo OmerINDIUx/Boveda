@@ -17,7 +17,8 @@ Route::post('/notes/{note}/update', [ProjectController::class, 'updateRevisionNo
 Route::post('/notes/{note}/toggle-resolve', [ProjectController::class, 'toggleResolveNote'])->name('notes.toggle-resolve');
 Route::get('/transmittals/{transmittal}/download', [\App\Http\Controllers\TransmittalPDFController::class, 'download'])->name('transmittals.download');
 
-// RFI Routes
+// RFI (Request for Information)
+Route::get('/rfis', [\App\Http\Controllers\RfiController::class, 'globalIndex'])->name('rfis.global');
 Route::get('/projects/{project}/rfis', [\App\Http\Controllers\RfiController::class, 'index'])->name('projects.rfis');
 Route::post('/projects/{project}/rfis', [\App\Http\Controllers\RfiController::class, 'store'])->name('projects.rfis.store');
 Route::get('/rfis/{rfi}', [\App\Http\Controllers\RfiController::class, 'show'])->name('rfis.show');
@@ -27,4 +28,8 @@ Route::patch('/rfis/{rfi}/status', [\App\Http\Controllers\RfiController::class, 
 // Project Mailbox
 Route::get('/projects/{project}/mailbox', [\App\Http\Controllers\ProjectMailboxController::class, 'index'])->name('projects.mailbox');
 Route::get('/projects/{project}/mailbox/{email}', [\App\Http\Controllers\ProjectMailboxController::class, 'show'])->name('projects.mailbox.show');
+
+// User Management
+Route::get('/users', [\App\Http\Controllers\UserController::class, 'index'])->name('users.index');
+Route::post('/users', [\App\Http\Controllers\UserController::class, 'store'])->name('users.store');
 

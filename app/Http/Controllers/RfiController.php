@@ -18,6 +18,12 @@ use App\Notifications\RfiResponseNotification;
 
 class RfiController extends Controller
 {
+    public function globalIndex()
+    {
+        $rfis = Rfi::with('project', 'creator')->latest()->get();
+        return view('rfis.global_index', compact('rfis'));
+    }
+
     public function index(Project $project)
     {
         $rfis = $project->rfis()->with(['creator', 'assignedTo'])->latest()->get();
