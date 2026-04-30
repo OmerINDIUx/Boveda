@@ -31,11 +31,15 @@
                 </td>
                 <td style="padding: 1.2rem; color: var(--text-muted);">{{ $user->email }}</td>
                 <td style="padding: 1.2rem; font-size: 0.85rem;">{{ $user->created_at->format('d/m/Y') }}</td>
-                <td style="padding: 1.2rem; display: flex; gap: 0.5rem;">
+                <td style="padding: 1.2rem; display: flex; gap: 0.5rem; align-items: center;">
                     <button class="btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.7rem;">Editar</button>
-                    <button class="btn-primary" style="padding: 0.4rem 0.8rem; font-size: 0.7rem; background: var(--text-muted);" onclick="copyInvitationLink('{{ $user->id }}', this)">
-                        Copiar Link
-                    </button>
+                    @if(!$user->email_verified_at)
+                        <button class="btn-primary" style="padding: 0.4rem 0.8rem; font-size: 0.7rem; background: var(--text-muted);" onclick="copyInvitationLink('{{ $user->id }}', this)">
+                            Copiar Link
+                        </button>
+                    @else
+                        <span style="font-size: 0.65rem; font-weight: 800; color: #10b981; background: rgba(16, 185, 129, 0.1); padding: 0.3rem 0.6rem; border-radius: 8px; text-transform: uppercase;">Activo</span>
+                    @endif
                 </td>
             </tr>
             @endforeach
