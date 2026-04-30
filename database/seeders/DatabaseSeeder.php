@@ -21,5 +21,12 @@ class DatabaseSeeder extends Seeder
         \App\Models\Discipline::create(['name' => 'Eléctrica', 'prefix' => 'ELE']);
         \App\Models\Discipline::create(['name' => 'Legal', 'prefix' => 'LEG']);
         \App\Models\Discipline::create(['name' => 'Administración', 'prefix' => 'ADM']);
+
+        User::factory()->create([
+            'name' => 'Administrador',
+            'email' => 'admin@boveda.com',
+            'password' => \Illuminate\Support\Facades\Hash::make('password'),
+            'clearance_level' => 'admin',
+        ]);
     }
 }

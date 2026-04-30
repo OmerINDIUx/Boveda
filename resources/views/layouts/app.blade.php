@@ -78,12 +78,30 @@
             <!-- ESPACIADOR PARA EMPUJAR HACIA ABAJO -->
             <div style="flex: 1;"></div>
 
+            <!-- PERFIL DE USUARIO -->
+            @if(Auth::check())
+            <div class="nav-icon" title="{{ Auth::user()->name }}" style="cursor: default; margin-bottom: 0.5rem; border: 2px solid var(--primary); padding: 2px;">
+                <div style="width: 100%; height: 100%; background: var(--primary); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 800; font-size: 0.7rem;">
+                    {{ strtoupper(substr(Auth::user()->name, 0, 2)) }}
+                </div>
+            </div>
+            @endif
+
             <!-- BOTÓN: CAMBIO DE TEMA (MODO CLARO/OSCURO) -->
-            <button onclick="toggleTheme()" class="nav-icon theme-toggle" id="theme-btn" title="Alternar Tema Claro/Oscuro" style="background: none; border: none; cursor: pointer; color: inherit; margin-bottom: 1.5rem; transition: 0.3s;">
+            <button onclick="toggleTheme()" class="nav-icon theme-toggle" id="theme-btn" title="Alternar Tema Claro/Oscuro" style="background: none; border: none; cursor: pointer; color: inherit; margin-bottom: 0.5rem; transition: 0.3s;">
                 <svg id="sun-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="18.36" x2="5.64" y2="19.78"></line><line x1="18.36" y1="4.22" x2="19.78" y2="5.64"></line></svg>
                 <svg id="moon-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: none;"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
             </button>
+
+            <!-- BOTÓN: CERRAR SESIÓN -->
+            <form action="{{ route('logout') }}" method="POST" id="logout-form">
+                @csrf
+                <button type="submit" class="nav-icon" title="Cerrar Sesión" style="background: none; border: none; cursor: pointer; color: #ef4444; margin-bottom: 1.5rem; transition: 0.3s;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                </button>
+            </form>
         </nav>
+
 
         <!-- LIENZO PRINCIPAL (CONTENT) -->
         <main class="main-canvas">

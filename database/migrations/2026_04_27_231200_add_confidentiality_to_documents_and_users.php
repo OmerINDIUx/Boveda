@@ -11,9 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Schema::table('users', function (Blueprint $table) {
-        //     $table->enum('clearance_level', ['standard', 'internal', 'manager', 'admin'])->default('standard')->after('email');
-        // });
+        Schema::table('users', function (Blueprint $table) {
+            $table->enum('clearance_level', ['standard', 'internal', 'manager', 'admin'])->default('standard')->after('email');
+        });
 
         Schema::table('documents', function (Blueprint $table) {
             $table->enum('confidentiality_level', ['public', 'internal', 'restricted', 'confidential'])->default('public');
