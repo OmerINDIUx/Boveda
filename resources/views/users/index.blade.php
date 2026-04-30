@@ -34,7 +34,10 @@
                 <td style="padding: 1.2rem; display: flex; gap: 0.5rem; align-items: center;">
                     <button class="btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.7rem;">Editar</button>
                     @if(!$user->email_verified_at)
-                        <button class="btn-primary" style="padding: 0.4rem 0.8rem; font-size: 0.7rem; background: var(--text-muted);" onclick="copyInvitationLink('{{ $user->id }}', this)">
+                        <button class="btn-primary" 
+                                style="padding: 0.4rem 0.8rem; font-size: 0.7rem; background: var(--text-muted);" 
+                                data-url="{{ route('users.invitation-link', $user->id) }}"
+                                onclick="copyInvitationLink(this)">
                             Copiar Link
                         </button>
                     @else
@@ -81,13 +84,14 @@
 </div>
 
 <script>
-async function copyInvitationLink(userId, button) {
+async function copyInvitationLink(button) {
+    const url = button.getAttribute('data-url');
     const originalText = button.innerText;
     button.innerText = 'Generando...';
     button.disabled = true;
 
     try {
-        const response = await fetch(`/users/${userId}/invitation-link`);
+        const response = await fetch(url);
         const data = await response.json();
         
         if (data.url) {
