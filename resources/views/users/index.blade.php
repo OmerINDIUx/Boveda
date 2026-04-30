@@ -31,8 +31,11 @@
                 </td>
                 <td style="padding: 1.2rem; color: var(--text-muted);">{{ $user->email }}</td>
                 <td style="padding: 1.2rem; font-size: 0.85rem;">{{ $user->created_at->format('d/m/Y') }}</td>
-                <td style="padding: 1.2rem;">
+                <td style="padding: 1.2rem; display: flex; gap: 0.5rem;">
                     <button class="btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.7rem;">Editar</button>
+                    <button class="btn-primary" style="padding: 0.4rem 0.8rem; font-size: 0.7rem; background: var(--text-muted);" onclick="copyInvitationLink('{{ $user->id }}', this)">
+                        Copiar Link
+                    </button>
                 </td>
             </tr>
             @endforeach
@@ -63,10 +66,6 @@
                     <label style="display: block; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.6rem;">Correo Electrónico</label>
                     <input type="email" name="email" required style="width: 100%; background: var(--bg-base); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; color: var(--text-main); outline: none;">
                 </div>
-                <div>
-                    <label style="display: block; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.6rem;">Contraseña Inicial</label>
-                    <input type="password" name="password" required style="width: 100%; background: var(--bg-base); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; color: var(--text-main); outline: none;">
-                </div>
             </div>
             
             <div style="margin-top: 2.5rem; display: flex; gap: 1rem; justify-content: flex-end;">
@@ -76,4 +75,36 @@
         </form>
     </div>
 </div>
+
+<script>
+async function copyInvitationLink(userId, button) {
+    const originalText = button.innerText;
+    button.innerText = 'Generando...';
+    button.disabled = true;
+
+    try {
+        const response = await fetch(`/users/${userId}/invitation-link`);
+        const data = await response.json();
+        
+        if (data.url) {
+            await navigator.clipboard.writeText(data.url);
+            button.innerText = '¡Copiado!';
+            button.style.background = '#10b981'; // Success green
+            
+            setTimeout(() => {
+                button.innerText = originalText;
+                button.style.background = 'var(--text-muted)';
+                button.disabled = false;
+            }, 2000);
+        }
+    } catch (error) {
+        console.error('Error al copiar el link:', error);
+        button.innerText = 'Error';
+        setTimeout(() => {
+            button.innerText = originalText;
+            button.disabled = false;
+        }, 2000);
+    }
+}
+</script>
 @endsection

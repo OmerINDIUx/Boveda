@@ -10,6 +10,10 @@ Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.post');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
+// Password Set (Invitation)
+Route::get('/set-password/{token}', [AuthController::class, 'showSetPassword'])->name('password.set');
+Route::post('/set-password', [AuthController::class, 'setPassword'])->name('password.update');
+
 // Protected Routes
 Route::middleware('auth')->group(function () {
     Route::get('/', [ProjectController::class, 'index'])->name('projects.index');
@@ -42,6 +46,7 @@ Route::middleware('auth')->group(function () {
     // User Management
     Route::get('/users', [\App\Http\Controllers\UserController::class, 'index'])->name('users.index');
     Route::post('/users', [\App\Http\Controllers\UserController::class, 'store'])->name('users.store');
+    Route::get('/users/{user}/invitation-link', [\App\Http\Controllers\UserController::class, 'getInvitationLink'])->name('users.invitation-link');
 
     // Global Disciplines Catalog
     Route::get('/disciplines', [\App\Http\Controllers\DisciplineController::class, 'index'])->name('disciplines.index');
