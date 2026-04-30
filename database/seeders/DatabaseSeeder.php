@@ -23,10 +23,11 @@ class DatabaseSeeder extends Seeder
         \App\Models\Discipline::create(['name' => 'Administración', 'prefix' => 'ADM']);
 
         User::factory()->create([
-            'name' => 'Administrador',
-            'email' => 'admin@boveda.com',
-            'password' => \Illuminate\Support\Facades\Hash::make('password'),
+            'name' => 'Omer',
+            'email' => 'omer@indi-lab.com',
+            'password' => \Illuminate\Support\Facades\Hash::make('Zmka6679.'),
             'clearance_level' => 'admin',
         ]);
+
     }
 }
