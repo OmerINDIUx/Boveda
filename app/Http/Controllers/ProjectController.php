@@ -377,4 +377,27 @@ class ProjectController extends Controller
 
         return back()->with('success', 'Disciplina agregada al proyecto.');
     }
+    public function recycleBin(Project $project)
+    {
+        $deletedFolders = Folder::onlyTrashed()->where('project_id', $project->id)->get();
+        $deletedDocuments = Document::onlyTrashed()->where('project_id', $project->id)->get();
+
+        return response()->json([
+            'folders' => $deletedFolders,
+            'documents' => $deletedDocuments
+        ]);
+    }
+
+    public function destroyDocument(Document $document)
+    {
+        $document->delete();
+        return back()->with('success', 'Documento enviado a la papelera.');
+    }
+
+    public function restoreDocument($id)
+    {
+        $doc = Document::withTrashed()->findOrFail($id);
+        $doc->restore();
+        return back()->with('success', 'Documento restaurado.');
+    }
 }

@@ -17,14 +17,34 @@ class FolderController extends Controller
             'discipline_id' => 'nullable|exists:disciplines,id'
         ]);
 
-        $folder = Folder::create([
+        $folder = Folder::firstOrCreate([
             'project_id' => $project->id,
-            'parent_id' => $request->parent_id,
             'discipline_id' => $request->discipline_id,
+            'parent_id' => $request->parent_id,
             'name' => $request->name
         ]);
 
-        return back()->with('success', 'Carpeta creada correctamente.');
+        return redirect()->route('projects.show', [$project->id, 'folder' => $folder->id])->with('success', 'Carpeta creada correctamente.');
+    }
+
+    public function update(Request $request, Folder $folder)
+    {
+        $request->validate(['name' => 'required|string|max:255']);
+        $folder->update(['name' => $request->name]);
+        return back()->with('success', 'Carpeta renombrada correctamente.');
+    }
+
+    public function destroy(Folder $folder)
+    {
+        $folder->delete(); // Soft delete
+        return back()->with('success', 'Carpeta enviada a la papelera.');
+    }
+
+    public function restore($id)
+    {
+        $folder = Folder::withTrashed()->findOrFail($id);
+        $folder->restore();
+        return back()->with('success', 'Carpeta restaurada.');
     }
 
     public function moveDocument(Request $request, Document $document)

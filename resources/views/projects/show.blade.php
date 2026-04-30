@@ -57,6 +57,10 @@
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
                     Buzón de Proyecto
                 </a>
+                <a href="#" onclick="openRecycleBin()" class="folder-item" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; border-radius: 8px; text-decoration: none; color: #ef4444; font-size: 0.8rem; font-weight: 600; transition: all 0.2s;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                    Papelera de Reciclaje
+                </a>
             </div>
 
             <div style="margin-top: 1rem;">
@@ -108,7 +112,12 @@
             </div>
         </div>
 
-        <div class="glass-card" style="padding: 0; flex: 1; overflow-y: auto; border-radius: 12px;">
+        <div id="breadcrumb" style="background: #f8fafc; padding: 0.75rem 1.25rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; font-weight: 700; color: var(--text-muted);">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+            <span id="bcRoot">Todos los documentos</span>
+        </div>
+
+        <div class="glass-card" style="padding: 0; flex: 1; overflow-y: auto; border-radius: 0 0 12px 12px; border-top: none;">
             <form id="bulkForm" action="{{ route('projects.transmittals.send', $project->id) }}" method="POST">
                 @csrf
                 <div class="data-grid">
@@ -120,6 +129,27 @@
                         <div>REV</div>
                         <div>ESTADO</div>
                     </div>
+
+                    <!-- FOLDERS IN MAIN GRID -->
+                    @foreach($disciplines as $d)
+                        @foreach($d->folders as $f)
+                        <div class="doc-row folder-row" 
+                             data-discipline="{{ $d->name }}" 
+                             data-folder-id-parent=""
+                             style="grid-template-columns: 40px 140px 2fr 120px 80px 120px; background: #f1f5f9; display: none;"
+                             onclick="filterByFolder('{{ $f->id }}', document.querySelector('.folder-item[data-folder-id=\'{{ $f->id }}\']'))">
+                            <div style="text-align: center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="#64748b" stroke="none"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></div>
+                            <div style="font-weight: 800; color: #64748b; font-size: 0.7rem;">CARPETA</div>
+                            <div style="font-weight: 800; color: #1e293b;">{{ $f->name }}</div>
+                            <div style="font-size: 0.75rem; font-weight: 600;">{{ $d->prefix }}</div>
+                            <div style="text-align: center;">-</div>
+                            <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                                <button onclick="event.stopPropagation(); openRenameFolderModal('{{ $f->id }}', '{{ $f->name }}')" class="btn-tool" style="font-size: 0.8rem;" title="Renombrar">✏️</button>
+                                <button onclick="event.stopPropagation(); deleteFolder('{{ $f->id }}')" class="btn-tool" style="font-size: 0.8rem; color: #ef4444;" title="Eliminar">🗑️</button>
+                            </div>
+                        </div>
+                        @endforeach
+                    @endforeach
                     
                     @foreach($documents as $doc)
                     @php $v = $doc->latestRevision; @endphp
@@ -145,10 +175,11 @@
                         </div>
                         <div style="font-size: 0.75rem; font-weight: 600;">{{ $doc->discipline->prefix }}</div>
                         <div style="text-align: center;"><span style="background: #eef2ff; padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 800;">{{ $v->revision_code ?? '-' }}</span></div>
-                        <div>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
                             <span class="status-pill pill-{{ str_contains($v->status ?? '', 'Approved') ? 'approved' : (str_contains($v->status ?? '', 'Review') ? 'review' : 'draft') }}">
                                 {{ $v->status ?? 'Draft' }}
                             </span>
+                            <button onclick="event.stopPropagation(); deleteDocument('{{ $doc->id }}')" class="btn-tool" style="font-size: 0.8rem; color: #ef4444;" title="Eliminar Documento">🗑️</button>
                         </div>
                     </div>
                     @endforeach
@@ -265,10 +296,39 @@
                 
                 <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1rem;">
                     <button type="button" class="btn-modern" style="background: transparent;" onclick="document.getElementById('folderModal').style.display='none'">CANCELAR</button>
-                    <button type="submit" class="btn-modern">CREAR CARPETA</button>
+                    <button type="submit" class="btn-modern" onclick="this.disabled=true; this.form.submit(); this.innerText='CREANDO...';">CREAR CARPETA</button>
                 </div>
             </div>
         </form>
+    </div>
+</div>
+
+<div id="renameFolderModal" class="modal-overlay" style="display: none;">
+    <div class="glass-card" style="width: 100%; max-width: 400px; padding: 2rem;">
+        <h2 style="font-size: 1.25rem; margin-bottom: 1rem;">Renombrar Carpeta</h2>
+        <form id="renameFolderForm" method="POST">
+            @csrf
+            @method('PATCH')
+            <div style="display: flex; flex-direction: column; gap: 1rem;">
+                <input type="text" name="name" id="renameFolderName" class="modal-input" required>
+                <div style="display: flex; justify-content: flex-end; gap: 1rem;">
+                    <button type="button" class="btn-modern" style="background: transparent;" onclick="document.getElementById('renameFolderModal').style.display='none'">CANCELAR</button>
+                    <button type="submit" class="btn-modern">GUARDAR</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="recycleBinModal" class="modal-overlay" style="display: none;">
+    <div class="glass-card" style="width: 90%; max-width: 800px; padding: 2.5rem; height: 80vh; display: flex; flex-direction: column;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <h2 style="font-size: 1.5rem; color: #ef4444;">Papelera de Reciclaje</h2>
+            <button onclick="document.getElementById('recycleBinModal').style.display='none'" style="background: #f1f5f9; border: none; width: 32px; height: 32px; border-radius: 50%; cursor: pointer;">✕</button>
+        </div>
+        <div id="recycleBinContent" style="flex: 1; overflow-y: auto;">
+            <p style="text-align: center; padding: 2rem; color: var(--text-muted);">Cargando elementos eliminados...</p>
+        </div>
     </div>
 </div>
 
@@ -464,10 +524,25 @@
         element.style.background = '#eef2ff';
         element.style.color = 'var(--primary)';
 
+        // Update Breadcrumb
+        const root = document.getElementById('bcRoot');
+        if (discipline === 'all') {
+            root.innerHTML = 'Todos los documentos';
+            history.replaceState(null, null, ' '); // Clear URL params
+        } else {
+            root.innerHTML = `Disciplina: <span style="color: var(--primary)">${discipline}</span>`;
+            updateUrlParam('discipline', discipline);
+        }
+
         const rows = document.querySelectorAll('.doc-row[data-discipline]');
         rows.forEach(row => {
             if (discipline === 'all' || row.getAttribute('data-discipline') === discipline) {
-                row.style.display = 'grid';
+                // If it's a folder-row, only show if NOT filtering by a specific folder
+                if (row.classList.contains('folder-row')) {
+                    row.style.display = (discipline !== 'all') ? 'grid' : 'none';
+                } else {
+                    row.style.display = 'grid';
+                }
             } else {
                 row.style.display = 'none';
             }
@@ -481,14 +556,28 @@
         element.style.background = '#eef2ff';
         element.style.color = 'var(--primary)';
 
+        // Update Breadcrumb
+        const discName = element.closest('.discipline-group').querySelector('.folder-item').innerText.trim();
+        const folderName = element.innerText.trim();
+        document.getElementById('bcRoot').innerHTML = `${discName} > <span style="color: var(--primary)">${folderName}</span>`;
+        updateUrlParam('folder', folderId);
+
         const rows = document.querySelectorAll('.doc-row[data-discipline]');
         rows.forEach(row => {
-            if (row.getAttribute('data-folder-id') === folderId) {
+            if (row.getAttribute('data-folder-id') === folderId && !row.classList.contains('folder-row')) {
                 row.style.display = 'grid';
             } else {
                 row.style.display = 'none';
             }
         });
+    }
+
+    function updateUrlParam(key, value) {
+        const url = new URL(window.location);
+        url.searchParams.set(key, value);
+        if (key === 'folder') url.searchParams.delete('discipline');
+        if (key === 'discipline') url.searchParams.delete('folder');
+        window.history.replaceState({}, '', url);
     }
 
     function openFolderModalForDiscipline(id, name) {
@@ -515,7 +604,39 @@
         event.dataTransfer.setData("docId", event.currentTarget.getAttribute("data-doc-id"));
     }
 
+    function moveDocument(docId, folderId) {
+        fetch(`/documents/${docId}/move`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            },
+            body: JSON.stringify({ folder_id: folderId })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                const row = document.querySelector(`.doc-row[data-doc-id="${docId}"]`);
+                if (row) row.setAttribute('data-folder-id', folderId);
+                alert('Documento movido con éxito.');
+            }
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
+        // Initial Filter from URL
+        const params = new URLSearchParams(window.location.search);
+        const folderId = params.get('folder');
+        const discipline = params.get('discipline');
+
+        if (folderId) {
+            const folderEl = document.querySelector(`.folder-item[data-folder-id="${folderId}"]`);
+            if (folderEl) filterByFolder(folderId, folderEl);
+        } else if (discipline) {
+            const discEl = Array.from(document.querySelectorAll('.folder-item')).find(el => el.innerText.trim() === discipline);
+            if (discEl) filterDiscipline(discipline, discEl);
+        }
+
         const dropZones = document.querySelectorAll('.drop-zone');
         
         dropZones.forEach(zone => {
@@ -541,30 +662,101 @@
         });
     });
 
-    function moveDocument(docId, folderId) {
-        fetch(`/documents/${docId}/move`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-            },
-            body: JSON.stringify({ folder_id: folderId })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.status === 'success') {
-                // Update UI: update attribute and optionally show success toast
-                const row = document.querySelector(`.doc-row[data-doc-id="${docId}"]`);
-                if (row) row.setAttribute('data-folder-id', folderId);
+    function openRenameFolderModal(id, currentName) {
+        const modal = document.getElementById('renameFolderModal');
+        const form = document.getElementById('renameFolderForm');
+        const input = document.getElementById('renameFolderName');
+        
+        form.action = `/folders/${id}`;
+        input.value = currentName;
+        modal.style.display = 'flex';
+    }
+
+    function deleteFolder(id) {
+        if (confirm('¿Estás seguro de enviar esta carpeta a la papelera? Todos sus documentos seguirán existiendo pero la carpeta ya no será visible.')) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = `/folders/${id}`;
+            form.innerHTML = `
+                @csrf
+                @method('DELETE')
+            `;
+            document.body.appendChild(form);
+            form.submit();
+        }
+    }
+
+    function deleteDocument(id) {
+        if (confirm('¿Enviar documento a la papelera?')) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = `/documents/${id}`;
+            form.innerHTML = `
+                @csrf
+                @method('DELETE')
+            `;
+            document.body.appendChild(form);
+            form.submit();
+        }
+    }
+
+    function openRecycleBin() {
+        const modal = document.getElementById('recycleBinModal');
+        const content = document.getElementById('recycleBinContent');
+        modal.style.display = 'flex';
+        content.innerHTML = '<p style="text-align: center; padding: 2rem;">Cargando papelera...</p>';
+        
+        fetch(`/projects/{{ $project->id }}/recycle-bin`)
+            .then(res => res.json())
+            .then(data => {
+                let html = '<div style="display: flex; flex-direction: column; gap: 1rem;">';
                 
-                // Show toast or notification (optional)
-                console.log(`Documento ${docId} movido a carpeta ${folderId}`);
-                
-                // If currently filtering by that folder or another, we might want to refresh the view
-                // For now, just a visual feedback is enough.
-                alert('Documento movido con éxito.');
-            }
-        });
+                if (data.folders.length === 0 && data.documents.length === 0) {
+                    html += '<p style="text-align: center; padding: 2rem; color: var(--text-muted);">La papelera está vacía.</p>';
+                }
+
+                data.folders.forEach(f => {
+                    html += `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 1rem; background: #f8fafc; border-radius: 12px; border: 1px solid var(--border);">
+                            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="#94a3b8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                                <div>
+                                    <div style="font-weight: 700; color: var(--text-main); font-size: 0.9rem;">${f.name}</div>
+                                    <div style="font-size: 0.7rem; color: var(--text-muted);">Carpeta eliminada</div>
+                                </div>
+                            </div>
+                            <button onclick="restoreItem('folder', '${f.id}')" class="btn-modern" style="padding: 0.4rem 0.8rem; font-size: 0.75rem;">RESTAURAR</button>
+                        </div>
+                    `;
+                });
+
+                data.documents.forEach(d => {
+                    html += `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 1rem; background: #fff; border-radius: 12px; border: 1px solid var(--border);">
+                            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                <div style="width: 32px; height: 32px; background: #eef2ff; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--primary); font-weight: 800; font-size: 0.7rem;">DOC</div>
+                                <div>
+                                    <div style="font-weight: 700; color: var(--text-main); font-size: 0.9rem;">${d.title}</div>
+                                    <div style="font-size: 0.7rem; color: var(--text-muted);">${d.document_number}</div>
+                                </div>
+                            </div>
+                            <button onclick="restoreItem('document', '${d.id}')" class="btn-modern" style="padding: 0.4rem 0.8rem; font-size: 0.75rem;">RESTAURAR</button>
+                        </div>
+                    `;
+                });
+
+                html += '</div>';
+                content.innerHTML = html;
+            });
+    }
+
+    function restoreItem(type, id) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = type === 'folder' ? `/folders/${id}/restore` : `/documents/${id}/restore`;
+        form.innerHTML = `@csrf`;
+        document.body.appendChild(form);
+        form.submit();
     }
 </script>
 

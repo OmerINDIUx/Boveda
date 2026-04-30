@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\FolderController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [ProjectController::class, 'index'])->name('projects.index');
@@ -40,8 +41,16 @@ Route::post('/disciplines', [\App\Http\Controllers\DisciplineController::class, 
 Route::delete('/disciplines/{discipline}', [\App\Http\Controllers\DisciplineController::class, 'destroy'])->name('disciplines.destroy');
 
 // Folders
-Route::post('/projects/{project}/folders', [\App\Http\Controllers\FolderController::class, 'store'])->name('projects.folders.store');
-Route::post('/documents/{document}/move', [\App\Http\Controllers\FolderController::class, 'moveDocument'])->name('documents.move');
+Route::post('/projects/{project}/folders', [FolderController::class, 'store'])->name('projects.folders.store');
+Route::patch('/folders/{folder}', [FolderController::class, 'update'])->name('folders.update');
+Route::delete('/folders/{folder}', [FolderController::class, 'destroy'])->name('folders.destroy');
+Route::post('/folders/{folder}/restore', [FolderController::class, 'restore'])->name('folders.restore');
+
+Route::post('/documents/{document}/move', [FolderController::class, 'moveDocument'])->name('documents.move');
+Route::delete('/documents/{document}', [ProjectController::class, 'destroyDocument'])->name('documents.destroy');
+Route::post('/documents/{document}/restore', [ProjectController::class, 'restoreDocument'])->name('documents.restore');
+
+Route::get('/projects/{project}/recycle-bin', [ProjectController::class, 'recycleBin'])->name('projects.recycle-bin');
 
 // Dashboard and Analytics
 Route::get('/projects/{project}/dashboard', [ProjectController::class, 'dashboard'])->name('projects.dashboard');
