@@ -22,12 +22,5 @@ class DatabaseSeeder extends Seeder
         \App\Models\Discipline::create(['name' => 'Legal', 'prefix' => 'LEG']);
         \App\Models\Discipline::create(['name' => 'Administración', 'prefix' => 'ADM']);
 
-        User::factory()->create([
-            'name' => 'Omer',
-            'email' => 'omer@indi-lab.com',
-            'password' => \Illuminate\Support\Facades\Hash::make('Zmka6679.'),
-            'clearance_level' => 'admin',
-        ]);
-
     }
 }
