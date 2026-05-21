@@ -54,6 +54,12 @@ Route::middleware('auth')->group(function () {
     Route::post('/disciplines', [\App\Http\Controllers\DisciplineController::class, 'store'])->name('disciplines.store');
     Route::delete('/disciplines/{discipline}', [\App\Http\Controllers\DisciplineController::class, 'destroy'])->name('disciplines.destroy');
 
+    // Global Approval Workflow Catalog
+    Route::get('/workflows', [\App\Http\Controllers\ApprovalWorkflowController::class, 'globalIndex'])->name('workflows.index');
+    Route::get('/workflows/create', [\App\Http\Controllers\ApprovalWorkflowController::class, 'create'])->name('workflows.create');
+    Route::post('/workflows', [\App\Http\Controllers\ApprovalWorkflowController::class, 'storeGlobal'])->name('workflows.store');
+    Route::get('/workflows/{workflow}/edit', [\App\Http\Controllers\ApprovalWorkflowController::class, 'edit'])->name('workflows.edit');
+
     // Folders
     Route::post('/projects/{project}/folders', [FolderController::class, 'store'])->name('projects.folders.store');
     Route::patch('/folders/{folder}', [FolderController::class, 'update'])->name('folders.update');
@@ -79,4 +85,3 @@ Route::middleware('auth')->group(function () {
     Route::post('/revisions/{revision}/request-approval', [\App\Http\Controllers\ApprovalRequestController::class, 'store'])->name('revisions.request-approval');
     Route::post('/approval-requests/{approval_request}/review', [\App\Http\Controllers\ApprovalRequestController::class, 'review'])->name('approval.review');
 });
-

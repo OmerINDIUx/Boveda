@@ -6,7 +6,7 @@
 <div class="project-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
     <div>
         <h1 style="font-weight: 800; font-size: 2.5rem; letter-spacing: -1px; margin: 0;">Motor de <span style="color: var(--primary);">Aprobaciones</span></h1>
-        <p style="color: var(--text-muted);">Configuración de rutas y niveles de aprobación para {{ $project->code }}</p>
+        <p style="color: var(--text-muted);">Rutas globales y rutas específicas disponibles para {{ $project->code }}</p>
     </div>
     <div style="display: flex; gap: 1rem;">
         <a href="{{ route('projects.show', $project->id) }}" class="btn-secondary" style="text-decoration: none; display: flex; align-items: center; gap: 0.5rem; padding: 0.8rem 1.5rem; border-radius: 12px; font-weight: 700;">
@@ -37,6 +37,9 @@
             </div>
 
             <h3 style="font-size: 1.25rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.5rem;">{{ $workflow->name }}</h3>
+            @if(!$workflow->project_id && $workflow->projects->isEmpty())
+                <span class="status-pill pill-approved" style="width: fit-content; margin-bottom: 0.75rem;">Global</span>
+            @endif
             <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem; flex: 1;">{{ $workflow->description ?? 'Sin descripción' }}</p>
             
             <div style="background: rgba(0,0,0,0.03); border-radius: 12px; padding: 1rem; margin-bottom: 1.5rem;">

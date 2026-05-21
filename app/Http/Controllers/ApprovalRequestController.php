@@ -18,7 +18,16 @@ class ApprovalRequestController extends Controller
             'approval_workflow_id' => 'required|exists:approval_workflows,id'
         ]);
 
-        $workflow = ApprovalWorkflow::with('steps')->findOrFail($request->approval_workflow_id);
+        $workflow = ApprovalWorkflow::with(['steps', 'projects'])->findOrFail($request->approval_workflow_id);
+        $documentProjectId = $revision->document?->project_id;
+        $isGlobalWorkflow = is_null($workflow->project_id) && $workflow->projects->isEmpty();
+        $isLegacyProjectWorkflow = $workflow->project_id === $documentProjectId;
+        $isAssignedProjectWorkflow = $workflow->projects->contains('id', $documentProjectId);
+
+        if (!$isGlobalWorkflow && !$isLegacyProjectWorkflow && !$isAssignedProjectWorkflow) {
+            return back()->withErrors(['workflow_error' => 'Este flujo no está disponible para el proyecto del documento.']);
+        }
+
         $firstStep = $workflow->steps->first();
 
         if (!$firstStep) {

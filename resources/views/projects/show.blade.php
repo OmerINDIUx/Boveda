@@ -105,7 +105,7 @@
             </div>
             <div style="display: flex; gap: 0.75rem;">
                 <a href="{{ route('projects.dashboard', $project->id) }}" class="btn-modern" style="background: white; border: 1px solid var(--border); color: var(--text-main); box-shadow: none;">Dashboard</a>
-                <a href="{{ route('projects.workflows', $project->id) }}" class="btn-modern" style="background: white; border: 1px solid var(--border); color: var(--text-main); box-shadow: none;">Flujos de Aprobación</a>
+                <a href="{{ route('workflows.index') }}" class="btn-modern" style="background: white; border: 1px solid var(--border); color: var(--text-main); box-shadow: none;">Catálogo de Flujos</a>
                 <a href="{{ route('projects.transmittals', $project->id) }}" class="btn-modern" style="background: white; border: 1px solid var(--border); color: var(--text-main); box-shadow: none;">Historial Transmittals</a>
                 <button class="btn-modern" onclick="document.getElementById('uploadModal').style.display='flex'">+ Nueva Carga</button>
                 <button id="btnTransmittal" class="btn-modern" style="background: var(--accent); display: none;" onclick="openTransmittalModal()">Transmitir Selección</button>
@@ -1240,12 +1240,20 @@
                                 <form action="/revisions/${v.id}/request-approval" method="POST" style="display: flex; gap: 0.5rem; align-items: center;">
                                     <input type="hidden" name="_token" value="${document.querySelector('meta[name="csrf-token"]').content}">
                                     <select name="approval_workflow_id" class="search-bar" style="flex: 1; padding: 0.4rem; font-size: 0.75rem;" required>
-                                        <option value="">Seleccione un flujo de aprobación...</option>
-                                        @foreach($workflows as $wf)
-                                            <option value="{{ $wf->id }}">{{ $wf->name }}</option>
-                                        @endforeach
+                                        @if($workflows->count() > 0)
+                                            <option value="">Seleccione un flujo creado...</option>
+                                            @foreach($workflows as $wf)
+                                                <option value="{{ $wf->id }}">{{ (!$wf->project_id && $wf->projects->isEmpty()) ? $wf->name . ' · global' : $wf->name }}</option>
+                                            @endforeach
+                                        @else
+                                            <option value="">No hay flujos creados para este proyecto</option>
+                                        @endif
                                     </select>
-                                    <button type="submit" class="btn-modern" style="padding: 0.4rem 1rem; font-size: 0.75rem;">Iniciar Flujo</button>
+                                    @if($workflows->count() > 0)
+                                        <button type="submit" class="btn-modern" style="padding: 0.4rem 1rem; font-size: 0.75rem;">Iniciar Flujo</button>
+                                    @else
+                                        <a href="{{ route('workflows.index') }}" class="btn-modern" style="padding: 0.4rem 1rem; font-size: 0.75rem; text-decoration: none;">Crear Flujo</a>
+                                    @endif
                                 </form>
                             `}
                         </div>

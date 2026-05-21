@@ -49,6 +49,13 @@
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
             </a>
 
+            <!-- BOTÓN: FLUJOS DE APROBACIÓN -->
+            <a href="{{ route('workflows.index') }}" 
+               class="nav-icon {{ request()->routeIs('workflows.*') || request()->routeIs('projects.workflows') ? 'active' : '' }}" 
+               title="Flujos de Aprobación">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"></circle><circle cx="18" cy="18" r="3"></circle><path d="M8.6 7.5c3.2 1.1 5.8 3.7 7 7"></path><path d="M18 8V5h-3"></path><path d="M6 16v3h3"></path></svg>
+            </a>
+
             <!-- NOTIFICACIONES (CAMPANA) -->
             <div class="nav-icon notification-trigger" style="position: relative; cursor: pointer;" onclick="document.getElementById('notification-dropdown').classList.toggle('active')">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>

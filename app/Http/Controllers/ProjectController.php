@@ -11,6 +11,9 @@ use App\Models\TransmittalItem;
 use App\Models\AuditLog;
 use App\Models\EmailLog;
 use App\Models\User;
+use App\Models\ApprovalRequest;
+use App\Models\ApprovalWorkflow;
+use App\Models\Rfi;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth;
@@ -21,8 +24,79 @@ class ProjectController extends Controller
 {
     public function index()
     {
+        $user = Auth::user();
         $projects = Project::with(['owner', 'manager'])->withCount('documents')->get();
-        return view('projects.index', compact('projects'));
+
+        $approvalTasks = collect();
+        $rfiTasks = collect();
+        $notificationTasks = collect();
+
+        if ($user) {
+            $approvalTasks = ApprovalRequest::where('status', 'en_revision')
+                ->whereHas('currentStep', fn ($query) => $query->where('user_id', $user->id))
+                ->with(['currentStep', 'workflow', 'fileRevision.document.project'])
+                ->latest()
+                ->take(6)
+                ->get()
+                ->map(fn ($approval) => [
+                    'type' => 'Aprobación',
+                    'title' => $approval->fileRevision?->document?->title ?? 'Documento pendiente de revisión',
+                    'context' => ($approval->workflow?->name ?? 'Flujo de aprobación') . ' · ' . ($approval->currentStep?->name ?? 'Paso actual'),
+                    'project' => $approval->fileRevision?->document?->project?->name,
+                    'url' => $approval->fileRevision?->document?->project
+                        ? route('projects.show', $approval->fileRevision->document->project_id)
+                        : '#',
+                    'priority' => 'alta',
+                    'date' => $approval->updated_at,
+                ]);
+
+            $rfiTasks = Rfi::where('assigned_to_id', $user->id)
+                ->whereIn('status', ['open', 'pending'])
+                ->with('project')
+                ->orderByRaw('CASE priority WHEN "urgent" THEN 1 WHEN "high" THEN 2 WHEN "medium" THEN 3 ELSE 4 END')
+                ->orderBy('due_date')
+                ->take(6)
+                ->get()
+                ->map(fn ($rfi) => [
+                    'type' => 'RFI',
+                    'title' => $rfi->subject,
+                    'context' => $rfi->number . ' · vence ' . ($rfi->due_date ? $rfi->due_date->format('d/m/Y') : 'sin fecha'),
+                    'project' => $rfi->project?->name,
+                    'url' => route('rfis.show', $rfi->id),
+                    'priority' => $rfi->priority === 'urgent' ? 'critica' : ($rfi->priority === 'high' ? 'alta' : 'media'),
+                    'date' => $rfi->due_date ?? $rfi->updated_at,
+                ]);
+
+            $notificationTasks = $user->unreadNotifications()
+                ->latest()
+                ->take(5)
+                ->get()
+                ->map(fn ($notification) => [
+                    'type' => 'Notificación',
+                    'title' => $notification->data['subject'] ?? 'Notificación pendiente',
+                    'context' => $notification->data['message'] ?? 'Revisa esta actividad reciente.',
+                    'project' => null,
+                    'url' => $notification->data['url'] ?? '#',
+                    'priority' => 'media',
+                    'date' => $notification->created_at,
+                ]);
+        }
+
+        $pendingTasks = $approvalTasks
+            ->concat($rfiTasks)
+            ->concat($notificationTasks)
+            ->sortByDesc(fn ($task) => $task['date']?->timestamp ?? 0)
+            ->take(10)
+            ->values();
+
+        $taskStats = [
+            'approvals' => $approvalTasks->count(),
+            'rfis' => $rfiTasks->count(),
+            'notifications' => $notificationTasks->count(),
+            'total' => $pendingTasks->count(),
+        ];
+
+        return view('projects.index', compact('projects', 'pendingTasks', 'taskStats'));
     }
 
     public function create()
@@ -144,7 +218,17 @@ class ProjectController extends Controller
             ->take(10)
             ->get();
 
-        $workflows = $project->approvalWorkflows;
+        $workflows = ApprovalWorkflow::where(function ($query) use ($project) {
+                $query->where(function ($scope) {
+                    $scope->whereNull('project_id')->doesntHave('projects');
+                })
+                ->orWhere('project_id', $project->id)
+                ->orWhereHas('projects', fn ($projects) => $projects->where('projects.id', $project->id));
+            })
+            ->with('steps.user')
+            ->with('projects')
+            ->orderBy('name')
+            ->get();
         $folders = $project->folders()->whereNull('parent_id')->with('children')->get();
 
         return view('projects.show', compact('project', 'disciplines', 'allDisciplines', 'documents', 'auditLogs', 'workflows', 'folders'));

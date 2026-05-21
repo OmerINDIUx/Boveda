@@ -13,8 +13,18 @@ class ApprovalWorkflow extends Model
         return $this->belongsTo(Project::class);
     }
 
+    public function projects()
+    {
+        return $this->belongsToMany(Project::class);
+    }
+
     public function steps()
     {
         return $this->hasMany(ApprovalStep::class)->orderBy('order');
+    }
+
+    public function approvalRequests()
+    {
+        return $this->hasMany(ApprovalRequest::class);
     }
 }
