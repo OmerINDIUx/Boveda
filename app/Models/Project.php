@@ -9,7 +9,35 @@ class Project extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'code', 'description'];
+    protected $fillable = [
+        'name',
+        'code',
+        'description',
+        'client_name',
+        'construction_location',
+        'owner_user_id',
+        'manager_user_id',
+        'start_date',
+        'target_date',
+        'contract_number',
+        'project_stage',
+        'priority_level',
+    ];
+
+    protected $casts = [
+        'start_date' => 'date',
+        'target_date' => 'date',
+    ];
+
+    public function owner()
+    {
+        return $this->belongsTo(User::class, 'owner_user_id');
+    }
+
+    public function manager()
+    {
+        return $this->belongsTo(User::class, 'manager_user_id');
+    }
 
     public function documents()
     {

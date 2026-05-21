@@ -112,6 +112,45 @@
             </div>
         </div>
 
+        @php
+            $stageLabels = [
+                'planeacion' => 'Planeación',
+                'diseno' => 'Diseño',
+                'construccion' => 'Construcción',
+                'cierre' => 'Cierre',
+                'pausado' => 'Pausado',
+            ];
+            $priorityLabels = [
+                'baja' => 'Baja',
+                'media' => 'Media',
+                'alta' => 'Alta',
+                'critica' => 'Crítica',
+            ];
+        @endphp
+        <div class="glass-card" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; padding: 1rem 1.25rem;">
+            <div>
+                <div style="font-size: 0.65rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase;">Responsable</div>
+                <div style="font-size: 0.85rem; color: var(--text-main); font-weight: 800; margin-top: 0.25rem;">{{ $project->owner->name ?? 'Sin asignar' }}</div>
+            </div>
+            <div>
+                <div style="font-size: 0.65rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase;">Obra</div>
+                <div style="font-size: 0.85rem; color: var(--text-main); font-weight: 800; margin-top: 0.25rem;">{{ $project->construction_location ?? 'Sin ubicación' }}</div>
+            </div>
+            <div>
+                <div style="font-size: 0.65rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase;">Etapa</div>
+                <div style="font-size: 0.85rem; color: var(--text-main); font-weight: 800; margin-top: 0.25rem;">{{ $stageLabels[$project->project_stage] ?? 'Por definir' }}</div>
+            </div>
+            <div>
+                <div style="font-size: 0.65rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase;">Objetivo</div>
+                <div style="font-size: 0.85rem; color: var(--text-main); font-weight: 800; margin-top: 0.25rem;">
+                    {{ $project->target_date ? $project->target_date->format('d/m/Y') : 'Sin fecha' }}
+                    @if($project->priority_level)
+                        <span class="status-pill pill-{{ $project->priority_level === 'critica' || $project->priority_level === 'alta' ? 'draft' : ($project->priority_level === 'media' ? 'review' : 'approved') }}" style="margin-left: 0.5rem;">{{ $priorityLabels[$project->priority_level] }}</span>
+                    @endif
+                </div>
+            </div>
+        </div>
+
         <div id="breadcrumb" style="background: #f8fafc; padding: 0.75rem 1.25rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; font-weight: 700; color: var(--text-muted);">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
             <span id="bcRoot">Todos los documentos</span>

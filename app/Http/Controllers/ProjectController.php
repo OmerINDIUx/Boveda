@@ -21,8 +21,14 @@ class ProjectController extends Controller
 {
     public function index()
     {
-        $projects = Project::withCount('documents')->get();
+        $projects = Project::with(['owner', 'manager'])->withCount('documents')->get();
         return view('projects.index', compact('projects'));
+    }
+
+    public function create()
+    {
+        $users = User::orderBy('name')->get();
+        return view('projects.create', compact('users'));
     }
 
     public function dashboard(Project $project)
@@ -75,13 +81,32 @@ class ProjectController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'code' => 'required|string|unique:projects,code',
+            'description' => 'nullable|string',
+            'client_name' => 'nullable|string|max:255',
+            'construction_location' => 'nullable|string|max:255',
+            'owner_user_id' => 'nullable|exists:users,id',
+            'manager_user_id' => 'nullable|exists:users,id',
+            'start_date' => 'nullable|date',
+            'target_date' => 'nullable|date|after_or_equal:start_date',
+            'contract_number' => 'nullable|string|max:100',
+            'project_stage' => 'nullable|string|in:planeacion,diseno,construccion,cierre,pausado',
+            'priority_level' => 'nullable|string|in:baja,media,alta,critica',
         ]);
 
-        $project = Project::create([
-            'name' => $request->name,
-            'code' => $request->code,
-            'description' => $request->description,
-        ]);
+        $project = Project::create($request->only([
+            'name',
+            'code',
+            'description',
+            'client_name',
+            'construction_location',
+            'owner_user_id',
+            'manager_user_id',
+            'start_date',
+            'target_date',
+            'contract_number',
+            'project_stage',
+            'priority_level',
+        ]));
 
         AuditLog::create([
             'user_id' => Auth::id() ?? User::first()?->id,
@@ -97,7 +122,7 @@ class ProjectController extends Controller
 
     public function show(Request $request, Project $project)
     {
-        $project->load(['folders', 'disciplines.folders']);
+        $project->load(['folders', 'disciplines.folders', 'owner', 'manager']);
         $disciplines = $project->disciplines;
         if ($disciplines->isEmpty()) {
             $all = Discipline::all();

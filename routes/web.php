@@ -17,6 +17,7 @@ Route::post('/set-password', [AuthController::class, 'setPassword'])->name('pass
 // Protected Routes
 Route::middleware('auth')->group(function () {
     Route::get('/', [ProjectController::class, 'index'])->name('projects.index');
+    Route::get('/projects/create', [ProjectController::class, 'create'])->name('projects.create');
     Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store');
     Route::get('/projects/{project}', [ProjectController::class, 'show'])->name('projects.show');
     Route::post('/projects/{project}/upload', [ProjectController::class, 'upload'])->name('projects.upload');
@@ -78,5 +79,4 @@ Route::middleware('auth')->group(function () {
     Route::post('/revisions/{revision}/request-approval', [\App\Http\Controllers\ApprovalRequestController::class, 'store'])->name('revisions.request-approval');
     Route::post('/approval-requests/{approval_request}/review', [\App\Http\Controllers\ApprovalRequestController::class, 'review'])->name('approval.review');
 });
-
 
