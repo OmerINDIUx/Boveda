@@ -5,11 +5,10 @@ namespace App\Notifications;
 use App\Models\Rfi;
 use App\Models\RfiResponse;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class RfiResponseNotification extends Notification implements ShouldQueue
+class RfiResponseNotification extends Notification
 {
     use Queueable;
 

@@ -27,7 +27,7 @@ class RfiController extends Controller
     public function index(Project $project)
     {
         $rfis = $project->rfis()->with(['creator', 'assignedTo'])->latest()->get();
-        $users = User::all();
+        $users = User::orderBy('name')->get();
         return view('rfis.index', compact('project', 'rfis', 'users'));
     }
 
@@ -172,4 +172,5 @@ class RfiController extends Controller
 
         return back()->with('success', "Estatus actualizado.");
     }
+
 }

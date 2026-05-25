@@ -4,6 +4,7 @@ use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\FolderController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\FilePermissionPolicyController;
+use App\Http\Controllers\GeneralEmailController;
 use Illuminate\Support\Facades\Route;
 
 // Authentication Routes
@@ -44,6 +45,13 @@ Route::middleware('auth')->group(function () {
     // Project Mailbox
     Route::get('/projects/{project}/mailbox', [\App\Http\Controllers\ProjectMailboxController::class, 'index'])->name('projects.mailbox');
     Route::get('/projects/{project}/mailbox/{email}', [\App\Http\Controllers\ProjectMailboxController::class, 'show'])->name('projects.mailbox.show');
+
+    // General Mail Center
+    Route::get('/emails', [GeneralEmailController::class, 'index'])->name('emails.index');
+    Route::get('/emails/templates', [GeneralEmailController::class, 'templates'])->name('emails.templates');
+    Route::post('/emails/send', [GeneralEmailController::class, 'send'])->name('emails.send');
+    Route::post('/emails/templates', [GeneralEmailController::class, 'storeTemplate'])->name('emails.templates.store');
+    Route::patch('/emails/{email}/important', [GeneralEmailController::class, 'toggleImportant'])->name('emails.important');
 
     // User Management
     Route::get('/users', [\App\Http\Controllers\UserController::class, 'index'])->name('users.index');

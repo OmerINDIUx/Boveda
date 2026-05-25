@@ -42,8 +42,8 @@
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
             </a>
 
-            <!-- BOTÓN: ARCHIVOS (PROXIMAMENTE O GENERAL) -->
-            <a href="#" class="nav-icon" title="Explorador de Archivos">
+            <!-- BOTÓN: CORREOS -->
+            <a href="{{ route('emails.index') }}" class="nav-icon {{ request()->routeIs('emails.*') ? 'active' : '' }}" title="Centro de Correos">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
             </a>
 
