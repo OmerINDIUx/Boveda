@@ -47,6 +47,7 @@ Route::middleware('auth')->group(function () {
     // User Management
     Route::get('/users', [\App\Http\Controllers\UserController::class, 'index'])->name('users.index');
     Route::post('/users', [\App\Http\Controllers\UserController::class, 'store'])->name('users.store');
+    Route::patch('/users/{user}/projects', [\App\Http\Controllers\UserController::class, 'updateProjects'])->name('users.projects.update');
     Route::get('/users/{user}/invitation-link', [\App\Http\Controllers\UserController::class, 'getInvitationLink'])->name('users.invitation-link');
 
     // Global Disciplines Catalog

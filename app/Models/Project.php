@@ -69,6 +69,11 @@ class Project extends Model
         return $this->hasMany(ApprovalWorkflow::class);
     }
 
+    public function users()
+    {
+        return $this->belongsToMany(User::class);
+    }
+
     public function getComplianceStatusAttribute()
     {
         // For now, return green if there is at least one document, else red/yellow
