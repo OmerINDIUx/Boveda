@@ -3,6 +3,7 @@
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\FolderController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\FilePermissionPolicyController;
 use Illuminate\Support\Facades\Route;
 
 // Authentication Routes
@@ -49,6 +50,11 @@ Route::middleware('auth')->group(function () {
     Route::post('/users', [\App\Http\Controllers\UserController::class, 'store'])->name('users.store');
     Route::patch('/users/{user}/projects', [\App\Http\Controllers\UserController::class, 'updateProjects'])->name('users.projects.update');
     Route::get('/users/{user}/invitation-link', [\App\Http\Controllers\UserController::class, 'getInvitationLink'])->name('users.invitation-link');
+
+    // File Permission Policies
+    Route::get('/policies', [FilePermissionPolicyController::class, 'index'])->name('policies.index');
+    Route::post('/policies', [FilePermissionPolicyController::class, 'store'])->name('policies.store');
+    Route::delete('/policies/{policy}', [FilePermissionPolicyController::class, 'destroy'])->name('policies.destroy');
 
     // Global Disciplines Catalog
     Route::get('/disciplines', [\App\Http\Controllers\DisciplineController::class, 'index'])->name('disciplines.index');
