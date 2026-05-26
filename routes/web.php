@@ -23,11 +23,15 @@ Route::middleware('auth')->group(function () {
     Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store');
     Route::get('/projects/{project}', [ProjectController::class, 'show'])->name('projects.show');
     Route::post('/projects/{project}/upload', [ProjectController::class, 'upload'])->name('projects.upload');
+    Route::post('/projects/{project}/chunked-upload/init', [ProjectController::class, 'initChunkedUpload'])->name('projects.chunked-upload.init');
+    Route::post('/projects/{project}/chunked-upload/chunk', [ProjectController::class, 'storeUploadChunk'])->name('projects.chunked-upload.chunk');
+    Route::post('/projects/{project}/chunked-upload/finish', [ProjectController::class, 'finishChunkedUpload'])->name('projects.chunked-upload.finish');
     Route::post('/projects/{project}/disciplines', [ProjectController::class, 'storeDiscipline'])->name('projects.disciplines.store');
     Route::get('/projects/{project}/transmittals', [ProjectController::class, 'transmittals'])->name('projects.transmittals');
     Route::post('/projects/{project}/transmittals', [ProjectController::class, 'sendTransmittal'])->name('projects.transmittals.send');
     Route::post('/documents/{document}/log-view', [ProjectController::class, 'logView'])->name('documents.log-view');
     Route::get('/documents/{document}/history', [ProjectController::class, 'history'])->name('documents.history');
+    Route::get('/documents/{document}/viewer', [ProjectController::class, 'viewer'])->name('documents.viewer');
     Route::get('/documents/{document}/edit', [ProjectController::class, 'editDocument'])->name('documents.edit');
     Route::patch('/documents/{document}', [ProjectController::class, 'updateDocument'])->name('documents.update');
     Route::post('/documents/{document}/toggle-lock', [ProjectController::class, 'toggleLock'])->name('documents.toggle-lock');

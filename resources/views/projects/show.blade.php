@@ -239,7 +239,7 @@
                          data-discipline="{{ $doc->discipline->name }}" 
                          data-folder-id="{{ $doc->folder_id ?? '' }}"
                          style="grid-template-columns: 40px 140px 2fr 120px 80px 120px 96px;" 
-                         onclick="openUltraTraceabilityPanel('{{ $doc->id }}', '{{ $doc->title }}', '{{ $doc->document_number }}', '{{ $v->revision_code ?? '-' }}', '{{ $v->status ?? '-' }}', '{{ $doc->discipline->name }}', '{{ $v ? $v->created_at->format('d/m/Y H:i') : '-' }}', '{{ $v ? asset('storage/'.$v->file_path) : '' }}')"
+                         onclick="window.open('{{ route('documents.viewer', $doc->id) }}', '_blank', 'noopener')"
                          ondragstart="onDragStart(event)">
                         <div style="text-align: center;" onclick="event.stopPropagation()"><input type="checkbox" name="document_ids[]" value="{{ $doc->id }}" onchange="updateBulkUI()"></div>
                         <div style="font-family: monospace; color: var(--primary); font-weight: 700;">
@@ -503,7 +503,7 @@
             <button type="button" onclick="document.getElementById('uploadModal').style.display='none'" style="background: #f1f5f9; border: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; color: #64748b; font-weight: bold; transition: background 0.2s;">✕</button>
         </div>
 
-        <form action="{{ route('projects.upload', $project->id) }}" method="POST" enctype="multipart/form-data">
+        <form action="{{ route('projects.upload', $project->id) }}" method="POST" enctype="multipart/form-data" onsubmit="return handleUploadSubmit(event)">
             @csrf
             <div class="modal-grid">
                 <!-- Columna Izquierda: Datos del Documento -->
@@ -628,7 +628,13 @@
                                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin: 0 auto;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
                             </div>
                             <p style="font-size: 0.9rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.25rem;">Arrastra tu archivo aquí o haz clic para explorar</p>
-                            <p id="fileNameDisplay" style="font-size: 0.75rem; color: #64748b;">Se permiten todos los tipos de archivo.</p>
+                            <p id="fileNameDisplay" style="font-size: 0.75rem; color: #64748b;">Se permiten todos los tipos de archivo. Arriba de 2 MB se cargará por partes.</p>
+                        </div>
+                        <div id="uploadProgressShell" style="display: none; margin-top: 0.9rem;">
+                            <div style="height: 10px; background: #e2e8f0; border-radius: 999px; overflow: hidden;">
+                                <div id="uploadProgressBar" style="height: 100%; width: 0%; background: var(--primary); transition: width 0.2s ease;"></div>
+                            </div>
+                            <p id="uploadProgressText" style="font-size: 0.72rem; color: #64748b; margin-top: 0.45rem; font-weight: 700;">Preparando carga...</p>
                         </div>
                     </div>
                 </div>
@@ -636,7 +642,7 @@
 
             <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border);">
                 <button type="button" class="btn-modern" style="background: transparent; color: #64748b; box-shadow: none;" onclick="document.getElementById('uploadModal').style.display='none'">CANCELAR</button>
-                <button type="submit" class="btn-modern" style="padding: 0.8rem 2rem; font-size: 0.85rem; background: var(--primary);">REGISTRAR DOCUMENTO</button>
+                <button type="submit" id="uploadSubmitButton" class="btn-modern" style="padding: 0.8rem 2rem; font-size: 0.85rem; background: var(--primary);">REGISTRAR DOCUMENTO</button>
             </div>
         </form>
     </div>
@@ -647,17 +653,125 @@
         const display = document.getElementById('fileNameDisplay');
         const dropzone = document.getElementById('dropzoneArea');
         if (input.files && input.files.length > 0) {
-            display.textContent = 'Archivo seleccionado: ' + input.files[0].name;
+            const sizeMb = (input.files[0].size / 1024 / 1024).toFixed(1);
+            const mode = input.files[0].size > normalUploadLimitBytes() ? ' · carga pesada por partes' : '';
+            display.textContent = `Archivo seleccionado: ${input.files[0].name} (${sizeMb} MB)${mode}`;
             display.style.color = 'var(--primary)';
             display.style.fontWeight = 'bold';
             dropzone.style.borderColor = 'var(--primary)';
             dropzone.style.background = '#eef2ff';
         } else {
-            display.textContent = 'Se permiten todos los tipos de archivo.';
+            display.textContent = 'Se permiten todos los tipos de archivo. Arriba de 2 MB se cargará por partes.';
             display.style.color = '#64748b';
             display.style.fontWeight = 'normal';
             dropzone.style.borderColor = '#cbd5e1';
             dropzone.style.background = '#f8fafc';
+        }
+    }
+
+    function normalUploadLimitBytes() {
+        return 2 * 1024 * 1024;
+    }
+
+    function handleUploadSubmit(event) {
+        const form = event.target;
+        const input = document.getElementById('fileInput');
+
+        if (!input.files || !input.files[0]) {
+            return true;
+        }
+
+        if (input.files[0].size <= normalUploadLimitBytes()) {
+            return true;
+        }
+
+        event.preventDefault();
+        startChunkedUpload(form, input.files[0]);
+        return false;
+    }
+
+    async function startChunkedUpload(form, file) {
+        const chunkSize = 1 * 1024 * 1024;
+        const totalChunks = Math.ceil(file.size / chunkSize);
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+        const submitButton = document.getElementById('uploadSubmitButton');
+        const progressShell = document.getElementById('uploadProgressShell');
+        const progressBar = document.getElementById('uploadProgressBar');
+        const progressText = document.getElementById('uploadProgressText');
+
+        submitButton.disabled = true;
+        submitButton.textContent = 'CARGANDO...';
+        progressShell.style.display = 'block';
+        progressBar.style.width = '0%';
+        progressText.textContent = 'Preparando carga pesada...';
+
+        try {
+            const initData = new FormData(form);
+            initData.delete('file');
+            initData.append('file_name', file.name);
+            initData.append('file_size', String(file.size));
+            initData.append('total_chunks', String(totalChunks));
+            initData.append('chunk_size', String(chunkSize));
+
+            const initResponse = await fetch("{{ route('projects.chunked-upload.init', $project->id) }}", {
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
+                body: initData
+            });
+            const initPayload = await initResponse.json();
+
+            if (!initResponse.ok) {
+                throw new Error(initPayload.message || 'No fue posible iniciar la carga pesada.');
+            }
+
+            for (let index = 0; index < totalChunks; index++) {
+                const start = index * chunkSize;
+                const end = Math.min(start + chunkSize, file.size);
+                const chunkData = new FormData();
+                chunkData.append('upload_id', initPayload.upload_id);
+                chunkData.append('chunk_index', String(index));
+                chunkData.append('chunk', file.slice(start, end), `${file.name}.part${index}`);
+
+                const chunkResponse = await fetch("{{ route('projects.chunked-upload.chunk', $project->id) }}", {
+                    method: 'POST',
+                    headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
+                    body: chunkData
+                });
+                const chunkPayload = await chunkResponse.json();
+
+                if (!chunkResponse.ok) {
+                    throw new Error(chunkPayload.message || `Falló la parte ${index + 1}.`);
+                }
+
+                const percent = Math.round(((index + 1) / totalChunks) * 100);
+                progressBar.style.width = `${percent}%`;
+                progressText.textContent = `Subiendo parte ${index + 1} de ${totalChunks} (${percent}%)`;
+            }
+
+            progressText.textContent = 'Armando archivo final en la bóveda...';
+
+            const finishData = new FormData();
+            finishData.append('upload_id', initPayload.upload_id);
+            const finishResponse = await fetch("{{ route('projects.chunked-upload.finish', $project->id) }}", {
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
+                body: finishData
+            });
+            const finishPayload = await finishResponse.json();
+
+            if (!finishResponse.ok) {
+                throw new Error(finishPayload.message || 'No fue posible finalizar la carga.');
+            }
+
+            progressBar.style.width = '100%';
+            progressText.textContent = 'Carga completada.';
+            window.location.href = finishPayload.redirect_url || "{{ route('projects.show', $project->id) }}";
+        } catch (error) {
+            alert(error.message || 'La carga pesada falló.');
+            submitButton.disabled = false;
+            submitButton.textContent = 'REGISTRAR DOCUMENTO';
+            progressText.textContent = 'Carga interrumpida. Puedes intentar de nuevo.';
+            return false;
         }
     }
 

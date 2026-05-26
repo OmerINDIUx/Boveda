@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'libreoffice' => [
+        'binary' => env('LIBREOFFICE_BINARY', 'soffice'),
+        'timeout' => env('LIBREOFFICE_TIMEOUT', 180),
+    ],
+
 ];

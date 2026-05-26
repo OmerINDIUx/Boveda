@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\LibreOfficePreviewService;
 use App\Models\Project;
 use App\Models\Document;
 use App\Models\FileRevision;
@@ -19,11 +20,17 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
 
 class ProjectController extends Controller 
 {
+    public function __construct(
+        private readonly LibreOfficePreviewService $libreOfficePreviewService,
+    ) {
+    }
+
     public function index()
     {
         $user = Auth::user();
@@ -239,62 +246,14 @@ class ProjectController extends Controller
     public function upload(Request $request, Project $project)
     {
         try {
-            $request->validate([
-                'file' => 'required|file',
-                'title' => 'required|string',
-                'discipline_id' => 'required|exists:disciplines,id',
-                'folder_id' => 'nullable|exists:folders,id',
-                'document_number' => 'required|string',
-                'revision_code' => 'required|string',
-                'status' => 'required|string',
-                'notes' => 'nullable|string',
-                'confidentiality_level' => 'nullable|string|in:public,internal,restricted,confidential',
-                'is_renewable' => 'nullable|boolean',
-                'renewal_frequency' => 'exclude_unless:is_renewable,1|required|string|in:once,weekly,monthly,yearly',
-                'renewal_due_date' => 'exclude_unless:is_renewable,1|nullable|required_if:renewal_frequency,once|date',
-                'renewal_weekday' => 'exclude_unless:is_renewable,1|nullable|required_if:renewal_frequency,weekly|integer|between:1,7',
-                'renewal_month_day' => 'exclude_unless:is_renewable,1|nullable|required_if:renewal_frequency,monthly,yearly|integer|between:1,31',
-                'renewal_month' => 'exclude_unless:is_renewable,1|nullable|required_if:renewal_frequency,yearly|integer|between:1,12',
-                'renewal_notes' => 'nullable|string',
-            ]);
+            $this->validateDocumentUploadMetadata($request, true);
 
             $file = $request->file('file');
             $originalName = $file->getClientOriginalName();
             $docNum = $request->document_number;
-            $renewalAttributes = $this->renewalAttributesFromRequest($request);
-            
-            // 1. Find or Create the Document Identity
-            $document = Document::firstOrCreate(
-                ['project_id' => $project->id, 'document_number' => $docNum],
-                [
-                    'discipline_id' => $request->discipline_id,
-                    'folder_id' => $request->folder_id,
-                    'title' => $request->title,
-                    'status' => 'ACTIVO',
-                    'confidentiality_level' => $request->confidentiality_level ?? 'public',
-                ] + $renewalAttributes
-            );
-
-            $document->fill([
-                'discipline_id' => $request->discipline_id,
-                'folder_id' => $request->folder_id,
-                'title' => $request->title,
-                'confidentiality_level' => $request->confidentiality_level ?? 'public',
-            ] + $renewalAttributes)->save();
-
-            if ($document->is_locked) {
-                return back()->withErrors(['upload_error' => 'El documento está BLOQUEADO por un proceso de aprobación activo.'])->withInput();
-            }
-
-            // 2. Mark previous revisions as NOT current
-            FileRevision::where('document_id', $document->id)->update(['is_current' => false]);
-
-            // 3. Store the physical file
-            $discipline = Discipline::find($request->discipline_id);
+            $discipline = Discipline::findOrFail($request->discipline_id);
             $extension = $file->getClientOriginalExtension();
-            $safeDocNum = Str::of($docNum)->replaceMatches('/[^A-Za-z0-9._-]/', '_');
-            $safeRevision = Str::of($request->revision_code)->replaceMatches('/[^A-Za-z0-9._-]/', '_');
-            $fileName = "{$safeDocNum}_REV_{$safeRevision}" . ($extension ? ".{$extension}" : '');
+            $fileName = $this->revisionFileName($docNum, $request->revision_code, $extension);
             $storagePath = "projects/{$project->id}/{$discipline->prefix}/{$fileName}";
             
             $stored = Storage::disk('public')->putFileAs("projects/{$project->id}/{$discipline->prefix}", $file, $fileName);
@@ -303,35 +262,276 @@ class ProjectController extends Controller
                 throw new \Exception("Error al guardar el archivo físico en Storage.");
             }
 
-            // 4. Create the new Revision
-            $revision = FileRevision::create([
-                'document_id' => $document->id,
-                'revision_code' => $request->revision_code,
-                'status' => $request->status,
-                'file_path' => $storagePath,
-                'original_name' => $originalName,
-                'extension' => $extension ?: 'archivo',
-                'size' => $file->getSize(),
-                'user_id' => Auth::id() ?? User::first()?->id,
-                'change_notes' => $request->notes,
-                'is_current' => true
-            ]);
-
-            AuditLog::create([
-                'user_id' => Auth::id() ?? User::first()?->id,
-                'action' => 'DOCUMENT_REVISED',
-                'model_type' => Project::class,
-                'model_id' => $project->id,
-                'details' => "Documento {$docNum} actualizado a Rev {$request->revision_code}.",
-                'ip_address' => $request->ip()
-            ]);
+            $this->registerStoredRevision($request, $project, $storagePath, $originalName, $extension ?: 'archivo', $file->getSize());
 
             return back()->with('success', "Revisión {$request->revision_code} registrada exitosamente.");
 
+        } catch (ValidationException $e) {
+            throw $e;
         } catch (\Exception $e) {
             Log::error("Error en upload: " . $e->getMessage());
             return back()->withErrors(['upload_error' => 'Error crítico: ' . $e->getMessage()])->withInput();
         }
+    }
+
+    public function initChunkedUpload(Request $request, Project $project)
+    {
+        $this->validateDocumentUploadMetadata($request);
+        $request->validate([
+            'file_name' => 'required|string|max:255',
+            'file_size' => 'required|integer|min:1|max:5368709120',
+            'total_chunks' => 'required|integer|min:1|max:10000',
+            'chunk_size' => 'required|integer|min:262144|max:2097152',
+        ]);
+
+        $uploadId = (string) Str::uuid();
+        $dir = $this->chunkUploadDir($uploadId);
+
+        Storage::disk('local')->makeDirectory($dir);
+        Storage::disk('local')->put($dir . '/manifest.json', json_encode([
+            'project_id' => $project->id,
+            'user_id' => Auth::id() ?? User::first()?->id,
+            'file_name' => $request->file_name,
+            'file_size' => (int) $request->file_size,
+            'total_chunks' => (int) $request->total_chunks,
+            'chunk_size' => (int) $request->chunk_size,
+            'metadata' => $request->only($this->documentUploadMetadataKeys()),
+            'received' => [],
+            'created_at' => now()->toIso8601String(),
+        ], JSON_PRETTY_PRINT));
+
+        return response()->json([
+            'upload_id' => $uploadId,
+            'chunk_size' => (int) $request->chunk_size,
+        ]);
+    }
+
+    public function storeUploadChunk(Request $request, Project $project)
+    {
+        $request->validate([
+            'upload_id' => 'required|string',
+            'chunk_index' => 'required|integer|min:0',
+            'chunk' => 'required|file|max:2048',
+        ]);
+
+        $dir = $this->chunkUploadDir($request->upload_id);
+        $manifest = $this->chunkManifest($request->upload_id);
+
+        abort_if(!$manifest || (int) $manifest['project_id'] !== $project->id, 404);
+        abort_if($request->chunk_index >= (int) $manifest['total_chunks'], 422, 'Parte fuera de rango.');
+
+        $chunkName = 'chunk_' . str_pad((string) $request->chunk_index, 6, '0', STR_PAD_LEFT) . '.part';
+        Storage::disk('local')->putFileAs($dir, $request->file('chunk'), $chunkName);
+
+        $manifest['received'][(string) $request->chunk_index] = [
+            'size' => $request->file('chunk')->getSize(),
+            'at' => now()->toIso8601String(),
+        ];
+        Storage::disk('local')->put($dir . '/manifest.json', json_encode($manifest, JSON_PRETTY_PRINT));
+
+        return response()->json([
+            'received' => count($manifest['received']),
+            'total' => (int) $manifest['total_chunks'],
+        ]);
+    }
+
+    public function finishChunkedUpload(Request $request, Project $project)
+    {
+        $request->validate(['upload_id' => 'required|string']);
+
+        try {
+            @set_time_limit(0);
+
+            $manifest = $this->chunkManifest($request->upload_id);
+            abort_if(!$manifest || (int) $manifest['project_id'] !== $project->id, 404);
+
+            $dir = $this->chunkUploadDir($request->upload_id);
+            $totalChunks = (int) $manifest['total_chunks'];
+
+            for ($i = 0; $i < $totalChunks; $i++) {
+                $chunkName = 'chunk_' . str_pad((string) $i, 6, '0', STR_PAD_LEFT) . '.part';
+                if (!Storage::disk('local')->exists($dir . '/' . $chunkName)) {
+                    return response()->json(['message' => "Falta la parte " . ($i + 1) . " de {$totalChunks}."], 422);
+                }
+            }
+
+            $metadataRequest = new Request($manifest['metadata']);
+            $discipline = Discipline::findOrFail($metadataRequest->discipline_id);
+            $extension = pathinfo($manifest['file_name'], PATHINFO_EXTENSION) ?: 'archivo';
+            $fileName = $this->revisionFileName($metadataRequest->document_number, $metadataRequest->revision_code, $extension);
+            $storageDir = "projects/{$project->id}/{$discipline->prefix}";
+            $storagePath = "{$storageDir}/{$fileName}";
+
+            Storage::disk('public')->makeDirectory($storageDir);
+            $targetPath = Storage::disk('public')->path($storagePath);
+            $target = fopen($targetPath, 'wb');
+
+            if (!$target) {
+                throw new \Exception('No fue posible crear el archivo final.');
+            }
+
+            for ($i = 0; $i < $totalChunks; $i++) {
+                $chunkName = 'chunk_' . str_pad((string) $i, 6, '0', STR_PAD_LEFT) . '.part';
+                $chunkPath = Storage::disk('local')->path($dir . '/' . $chunkName);
+                $source = fopen($chunkPath, 'rb');
+
+                if (!$source) {
+                    fclose($target);
+                    throw new \Exception("No fue posible leer la parte " . ($i + 1) . ".");
+                }
+
+                stream_copy_to_stream($source, $target);
+                fclose($source);
+            }
+
+            fclose($target);
+
+            clearstatcache(true, $targetPath);
+            $finalSize = filesize($targetPath) ?: 0;
+            if ($finalSize !== (int) $manifest['file_size']) {
+                Storage::disk('public')->delete($storagePath);
+                throw new \Exception('El archivo final no coincide con el tamaño esperado.');
+            }
+
+            $this->registerStoredRevision($metadataRequest, $project, $storagePath, $manifest['file_name'], $extension, $finalSize);
+            Storage::disk('local')->deleteDirectory($dir);
+
+            return response()->json([
+                'message' => "Revisión {$metadataRequest->revision_code} registrada exitosamente.",
+                'redirect_url' => route('projects.show', $project->id),
+            ]);
+        } catch (\Exception $e) {
+            Log::error("Error en finishChunkedUpload: " . $e->getMessage());
+            return response()->json(['message' => 'Error crítico: ' . $e->getMessage()], 500);
+        }
+    }
+
+    private function validateDocumentUploadMetadata(Request $request, bool $includeFile = false): void
+    {
+        $rules = [
+            'title' => 'required|string',
+            'discipline_id' => 'required|exists:disciplines,id',
+            'folder_id' => 'nullable|exists:folders,id',
+            'document_number' => 'required|string',
+            'revision_code' => 'required|string',
+            'status' => 'required|string',
+            'notes' => 'nullable|string',
+            'confidentiality_level' => 'nullable|string|in:public,internal,restricted,confidential',
+            'is_renewable' => 'nullable|boolean',
+            'renewal_frequency' => 'exclude_unless:is_renewable,1|required|string|in:once,weekly,monthly,yearly',
+            'renewal_due_date' => 'exclude_unless:is_renewable,1|nullable|required_if:renewal_frequency,once|date',
+            'renewal_weekday' => 'exclude_unless:is_renewable,1|nullable|required_if:renewal_frequency,weekly|integer|between:1,7',
+            'renewal_month_day' => 'exclude_unless:is_renewable,1|nullable|required_if:renewal_frequency,monthly,yearly|integer|between:1,31',
+            'renewal_month' => 'exclude_unless:is_renewable,1|nullable|required_if:renewal_frequency,yearly|integer|between:1,12',
+            'renewal_notes' => 'nullable|string',
+        ];
+
+        if ($includeFile) {
+            $rules = ['file' => 'required|file|max:2048'] + $rules;
+        }
+
+        $request->validate($rules);
+    }
+
+    private function registerStoredRevision(Request $request, Project $project, string $storagePath, string $originalName, string $extension, int $size): FileRevision
+    {
+        $docNum = $request->document_number;
+        $renewalAttributes = $this->renewalAttributesFromRequest($request);
+        
+        $document = Document::firstOrCreate(
+            ['project_id' => $project->id, 'document_number' => $docNum],
+            [
+                'discipline_id' => $request->discipline_id,
+                'folder_id' => $request->folder_id,
+                'title' => $request->title,
+                'status' => 'ACTIVO',
+                'confidentiality_level' => $request->confidentiality_level ?? 'public',
+            ] + $renewalAttributes
+        );
+
+        $document->fill([
+            'discipline_id' => $request->discipline_id,
+            'folder_id' => $request->folder_id,
+            'title' => $request->title,
+            'confidentiality_level' => $request->confidentiality_level ?? 'public',
+        ] + $renewalAttributes)->save();
+
+        if ($document->is_locked) {
+            throw new \Exception('El documento está BLOQUEADO por un proceso de aprobación activo.');
+        }
+
+        FileRevision::where('document_id', $document->id)->update(['is_current' => false]);
+
+        $revision = FileRevision::create([
+            'document_id' => $document->id,
+            'revision_code' => $request->revision_code,
+            'status' => $request->status,
+            'file_path' => $storagePath,
+            'original_name' => $originalName,
+            'extension' => $extension ?: 'archivo',
+            'size' => $size,
+            'user_id' => Auth::id() ?? User::first()?->id,
+            'change_notes' => $request->notes,
+            'is_current' => true
+        ]);
+
+        AuditLog::create([
+            'user_id' => Auth::id() ?? User::first()?->id,
+            'action' => 'DOCUMENT_REVISED',
+            'model_type' => Project::class,
+            'model_id' => $project->id,
+            'details' => "Documento {$docNum} actualizado a Rev {$request->revision_code}.",
+            'ip_address' => request()->ip()
+        ]);
+
+        $this->warmDocumentPreview($revision);
+
+        return $revision;
+    }
+
+    private function revisionFileName(string $documentNumber, string $revisionCode, ?string $extension): string
+    {
+        $safeDocNum = Str::of($documentNumber)->replaceMatches('/[^A-Za-z0-9._-]/', '_');
+        $safeRevision = Str::of($revisionCode)->replaceMatches('/[^A-Za-z0-9._-]/', '_');
+
+        return "{$safeDocNum}_REV_{$safeRevision}" . ($extension ? ".{$extension}" : '');
+    }
+
+    private function documentUploadMetadataKeys(): array
+    {
+        return [
+            'title',
+            'discipline_id',
+            'folder_id',
+            'document_number',
+            'revision_code',
+            'status',
+            'notes',
+            'confidentiality_level',
+            'is_renewable',
+            'renewal_frequency',
+            'renewal_due_date',
+            'renewal_weekday',
+            'renewal_month_day',
+            'renewal_month',
+            'renewal_notes',
+        ];
+    }
+
+    private function chunkUploadDir(string $uploadId): string
+    {
+        return 'chunked_uploads/' . preg_replace('/[^A-Za-z0-9-]/', '', $uploadId);
+    }
+
+    private function chunkManifest(string $uploadId): ?array
+    {
+        $path = $this->chunkUploadDir($uploadId) . '/manifest.json';
+
+        if (!Storage::disk('local')->exists($path)) {
+            return null;
+        }
+
+        return json_decode(Storage::disk('local')->get($path), true);
     }
 
     public function updateDocument(Request $request, Document $document)
@@ -391,6 +591,465 @@ class ProjectController extends Controller
         $folders = $project->folders()->orderBy('name')->get();
 
         return view('documents.edit', compact('document', 'project', 'disciplines', 'folders'));
+    }
+
+    public function viewer(Request $request, Document $document)
+    {
+        $document->load([
+            'project',
+            'discipline',
+            'latestRevision.notes.user',
+            'latestRevision.approvalRequests.currentStep.user',
+            'latestRevision.approvalRequests.workflow.steps.user',
+            'revisions.notes.user',
+            'revisions.approvalRequests.currentStep.user',
+            'revisions.approvalRequests.workflow',
+        ]);
+        $revision = $document->latestRevision;
+        $preview = $this->buildDocumentPreview($revision);
+        $workflows = ApprovalWorkflow::where(function ($query) use ($document) {
+                $query->where(function ($scope) {
+                    $scope->whereNull('project_id')->doesntHave('projects');
+                })
+                ->orWhere('project_id', $document->project_id)
+                ->orWhereHas('projects', fn ($projects) => $projects->where('projects.id', $document->project_id));
+            })
+            ->with('steps.user')
+            ->orderBy('name')
+            ->get();
+        $auditLogs = AuditLog::where(function ($query) use ($document) {
+                $query->where('model_type', Document::class)->where('model_id', $document->id);
+            })->orWhere(function ($query) use ($document) {
+                $query->where('model_type', FileRevision::class)->whereIn('model_id', $document->revisions->pluck('id'));
+            })
+            ->with('user')
+            ->latest()
+            ->take(25)
+            ->get();
+
+        AuditLog::create([
+            'user_id' => Auth::id() ?? User::first()?->id,
+            'action' => 'DOCUMENT_READ',
+            'model_type' => Document::class,
+            'model_id' => $document->id,
+            'details' => "El usuario abrió el visor dedicado del documento.",
+            'ip_address' => $request->ip()
+        ]);
+
+        return view('documents.viewer', compact('document', 'revision', 'preview', 'workflows', 'auditLogs'));
+    }
+
+    private function buildDocumentPreview(?FileRevision $revision): array
+    {
+        if (!$revision) {
+            return ['type' => 'empty', 'label' => 'Sin archivo', 'message' => 'Este documento todavía no tiene una revisión cargada.'];
+        }
+
+        $disk = Storage::disk('public');
+        $extension = strtolower($revision->extension ?: pathinfo($revision->original_name, PATHINFO_EXTENSION));
+        $url = asset('storage/' . $revision->file_path);
+
+        if (!$disk->exists($revision->file_path)) {
+            return ['type' => 'missing', 'label' => 'Archivo no encontrado', 'message' => 'No se encontró el archivo físico en almacenamiento.', 'url' => $url];
+        }
+
+        $path = $disk->path($revision->file_path);
+        $libreOfficePreview = $this->libreOfficePreviewService->ensurePdfPreview($revision);
+
+        if ($extension === 'pdf') {
+            return ['type' => 'embed', 'label' => 'PDF', 'url' => $url];
+        }
+
+        if (in_array($extension, ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'], true)) {
+            return ['type' => 'image', 'label' => 'Imagen', 'url' => $url];
+        }
+
+        if ($extension === 'csv') {
+            return ['type' => 'table', 'label' => 'CSV', 'rows' => $this->previewCsv($path), 'url' => $url];
+        }
+
+        if ($extension === 'json') {
+            $content = $this->readPreviewText($path);
+            $decoded = json_decode($content, true);
+            return [
+                'type' => 'code',
+                'label' => 'JSON',
+                'content' => json_last_error() === JSON_ERROR_NONE
+                    ? json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+                    : $content,
+                'url' => $url,
+            ];
+        }
+
+        if (in_array($extension, ['txt', 'log', 'md', 'markdown', 'xml', 'html', 'htm', 'rtf', 'ini', 'env', 'yml', 'yaml'], true)) {
+            $content = $extension === 'rtf'
+                ? $this->plainTextFromRtf($this->readPreviewText($path, 180000))
+                : $this->readPreviewText($path);
+
+            return ['type' => 'code', 'label' => strtoupper($extension), 'content' => $content, 'url' => $url];
+        }
+
+        if ($libreOfficePreview['available'] ?? false) {
+            return [
+                'type' => 'embed',
+                'label' => strtoupper($extension),
+                'url' => $libreOfficePreview['url'],
+                'source' => 'libreoffice',
+                'hint' => 'Vista renderizada con LibreOffice.',
+            ];
+        }
+
+        if ($extension === 'docx') {
+            return [
+                'type' => 'code',
+                'label' => 'DOCX',
+                'content' => $this->textFromDocx($path),
+                'url' => $url,
+                'source' => 'local-fallback',
+                'hint' => $libreOfficePreview['message'] ?? 'No fue posible renderizar este archivo con LibreOffice.',
+            ];
+        }
+
+        if ($extension === 'xlsx') {
+            return [
+                'type' => 'spreadsheet',
+                'label' => 'XLSX',
+                'sheets' => $this->workbookFromXlsx($path),
+                'url' => $url,
+                'source' => 'spreadsheet-native',
+                'hint' => 'Vista tipo hoja de calculo con pestañas por hoja.',
+            ];
+        }
+
+        if ($extension === 'pptx') {
+            if (!$this->libreOfficePreviewService->supports($extension) || !($libreOfficePreview['available'] ?? false)) {
+                return [
+                    'type' => 'unsupported',
+                    'label' => 'PPTX',
+                    'message' => $libreOfficePreview['message'] ?? 'No fue posible renderizar este archivo de PowerPoint con LibreOffice.',
+                    'url' => $url,
+                    'hint' => 'Cuando LibreOffice esté disponible, este archivo se mostrará como PDF dentro del visor.',
+                ];
+            }
+
+            return [
+                'type' => 'presentation',
+                'label' => 'PPTX',
+                'slides' => $this->slidesFromPptx($path),
+                'url' => $url,
+                'source' => 'local-fallback',
+                'hint' => $libreOfficePreview['message'] ?? 'No fue posible renderizar este archivo con LibreOffice.',
+            ];
+        }
+
+        if (in_array($extension, ['doc', 'xls', 'ppt'], true)) {
+            return [
+                'type' => 'unsupported',
+                'label' => strtoupper($extension),
+                'message' => $libreOfficePreview['message'] ?? 'No fue posible renderizar este archivo clásico de Office con LibreOffice.',
+                'url' => $url,
+            ];
+        }
+
+        return [
+            'type' => 'unsupported',
+            'label' => strtoupper($extension ?: 'Archivo'),
+            'message' => 'Este tipo de archivo se puede descargar, pero no tiene lectura previa configurada.',
+            'url' => $url,
+        ];
+    }
+
+    private function warmDocumentPreview(FileRevision $revision): void
+    {
+        $extension = strtolower($revision->extension ?: pathinfo($revision->original_name, PATHINFO_EXTENSION));
+
+        if (!$this->libreOfficePreviewService->supports($extension)) {
+            return;
+        }
+
+        $result = $this->libreOfficePreviewService->ensurePdfPreview($revision);
+        if (!($result['available'] ?? false) && !empty($result['message'])) {
+            Log::warning('No fue posible precalentar la vista previa LibreOffice.', [
+                'revision_id' => $revision->id,
+                'message' => $result['message'],
+            ]);
+        }
+    }
+
+    private function readPreviewText(string $path, int $limit = 220000): string
+    {
+        $content = file_get_contents($path, false, null, 0, $limit) ?: '';
+        return mb_convert_encoding($content, 'UTF-8', 'UTF-8, ISO-8859-1, Windows-1252');
+    }
+
+    private function previewCsv(string $path): array
+    {
+        $rows = [];
+        $handle = fopen($path, 'r');
+
+        if (!$handle) {
+            return $rows;
+        }
+
+        while (($row = fgetcsv($handle)) !== false && count($rows) < 200) {
+            $rows[] = array_map(fn ($cell) => mb_convert_encoding((string) $cell, 'UTF-8', 'UTF-8, ISO-8859-1, Windows-1252'), $row);
+        }
+
+        fclose($handle);
+        return $rows;
+    }
+
+    private function plainTextFromRtf(string $content): string
+    {
+        $content = preg_replace('/\\\\par[d]?/', "\n", $content);
+        $content = preg_replace("/\\\\'[0-9a-fA-F]{2}/", '', $content);
+        $content = preg_replace('/\\\\[a-zA-Z]+-?\d* ?/', '', $content);
+        $content = str_replace(['{', '}'], '', $content);
+        return trim($content);
+    }
+
+    private function textFromDocx(string $path): string
+    {
+        if (!class_exists(\ZipArchive::class)) {
+            return 'El servidor no tiene soporte ZIP activo para leer DOCX.';
+        }
+
+        $zip = new \ZipArchive();
+        if ($zip->open($path) !== true) {
+            return 'No fue posible leer el contenido del DOCX.';
+        }
+
+        $xml = $zip->getFromName('word/document.xml') ?: '';
+        $zip->close();
+
+        $xml = str_replace(['</w:p>', '</w:tr>'], "\n", $xml);
+        return trim(html_entity_decode(strip_tags($xml)));
+    }
+
+    private function workbookFromXlsx(string $path): array
+    {
+        if (!class_exists(\ZipArchive::class)) {
+            return [[
+                'name' => 'Hoja 1',
+                'rows' => [['El servidor no tiene soporte ZIP activo para leer XLSX.']],
+                'truncated' => false,
+            ]];
+        }
+
+        $zip = new \ZipArchive();
+        if ($zip->open($path) !== true) {
+            return [];
+        }
+
+        $sharedStrings = [];
+        $sharedXml = $zip->getFromName('xl/sharedStrings.xml');
+        if ($sharedXml) {
+            preg_match_all('/<si.*?>(.*?)<\/si>/s', $sharedXml, $matches);
+            foreach ($matches[1] as $item) {
+                $sharedStrings[] = $this->officeXmlText($item);
+            }
+        }
+
+        $sheets = $this->xlsxSheetIndex($zip);
+        $workbook = [];
+
+        foreach ($sheets as $sheet) {
+            $sheetXml = $zip->getFromName($sheet['path']) ?: '';
+            $rows = $this->rowsFromXlsxSheet($sheetXml, $sharedStrings);
+            $maxColumns = collect($rows)->map(fn ($row) => count($row))->max() ?? 0;
+            $workbook[] = [
+                'name' => $sheet['name'],
+                'rows' => $rows,
+                'max_columns' => $maxColumns,
+                'column_labels' => $this->xlsxColumnLabels($maxColumns),
+                'column_widths' => $this->xlsxColumnWidths($sheetXml, $maxColumns),
+                'truncated' => substr_count($sheetXml, '<row') > 200,
+            ];
+        }
+
+        $zip->close();
+
+        return $workbook;
+    }
+
+    private function xlsxSheetIndex(\ZipArchive $zip): array
+    {
+        $workbookXml = $zip->getFromName('xl/workbook.xml') ?: '';
+        $relsXml = $zip->getFromName('xl/_rels/workbook.xml.rels') ?: '';
+        $rels = [];
+
+        preg_match_all('/<Relationship[^>]*Id="([^"]+)"[^>]*Target="([^"]+)"/', $relsXml, $relMatches, PREG_SET_ORDER);
+        foreach ($relMatches as $rel) {
+            $rels[$rel[1]] = 'xl/' . ltrim($rel[2], '/');
+        }
+
+        $sheets = [];
+        preg_match_all('/<sheet[^>]*name="([^"]+)"[^>]*(?:r:id|id)="([^"]+)"/', $workbookXml, $sheetMatches, PREG_SET_ORDER);
+        foreach ($sheetMatches as $sheet) {
+            if (isset($rels[$sheet[2]])) {
+                $sheets[] = [
+                    'name' => html_entity_decode($sheet[1]),
+                    'path' => $rels[$sheet[2]],
+                ];
+            }
+        }
+
+        return $sheets ?: [['name' => 'Hoja 1', 'path' => 'xl/worksheets/sheet1.xml']];
+    }
+
+    private function rowsFromXlsxSheet(string $sheetXml, array $sharedStrings): array
+    {
+        $rows = [];
+        preg_match_all('/<row[^>]*>(.*?)<\/row>/s', $sheetXml, $rowMatches);
+        foreach (array_slice($rowMatches[1], 0, 200) as $rowXml) {
+            $row = [];
+            preg_match_all('/<c([^>]*)>(.*?)<\/c>/s', $rowXml, $cellMatches, PREG_SET_ORDER);
+            foreach ($cellMatches as $cell) {
+                preg_match('/r="([A-Z]+)\d+"/', $cell[1], $refMatch);
+                $columnIndex = isset($refMatch[1]) ? $this->xlsxColumnIndex($refMatch[1]) : count($row);
+
+                while (count($row) < $columnIndex) {
+                    $row[] = '';
+                }
+
+                $row[] = $this->xlsxCellValue($cell[1], $cell[2], $sharedStrings);
+            }
+            $rows[] = $row;
+        }
+
+        return $rows;
+    }
+
+    private function xlsxCellValue(string $attributes, string $xml, array $sharedStrings): string
+    {
+        if (str_contains($attributes, 't="inlineStr"')) {
+            return $this->officeXmlText($xml);
+        }
+
+        preg_match('/<v>(.*?)<\/v>/s', $xml, $valueMatch);
+        $value = isset($valueMatch[1]) ? html_entity_decode($valueMatch[1]) : '';
+
+        if (str_contains($attributes, 't="s"')) {
+            return $sharedStrings[(int) $value] ?? $value;
+        }
+
+        return $value;
+    }
+
+    private function xlsxColumnIndex(string $letters): int
+    {
+        $index = 0;
+        foreach (str_split($letters) as $letter) {
+            $index = ($index * 26) + (ord($letter) - 64);
+        }
+
+        return max(0, $index - 1);
+    }
+
+    private function xlsxColumnLabels(int $maxColumns): array
+    {
+        $labels = [];
+
+        for ($index = 0; $index < $maxColumns; $index++) {
+            $value = $index + 1;
+            $label = '';
+
+            while ($value > 0) {
+                $mod = ($value - 1) % 26;
+                $label = chr(65 + $mod) . $label;
+                $value = intdiv($value - 1, 26);
+            }
+
+            $labels[] = $label;
+        }
+
+        return $labels;
+    }
+
+    private function xlsxColumnWidths(string $sheetXml, int $maxColumns): array
+    {
+        $widths = array_fill(0, $maxColumns, 140);
+
+        preg_match_all('/<col[^>]*min="(\d+)"[^>]*max="(\d+)"[^>]*width="([\d.]+)"/', $sheetXml, $matches, PREG_SET_ORDER);
+        foreach ($matches as $match) {
+            $min = max(1, (int) $match[1]);
+            $max = max($min, (int) $match[2]);
+            $excelWidth = (float) $match[3];
+            $pixelWidth = max(80, min(320, (int) round($excelWidth * 7.2)));
+
+            for ($column = $min - 1; $column <= min($max - 1, $maxColumns - 1); $column++) {
+                $widths[$column] = $pixelWidth;
+            }
+        }
+
+        return $widths;
+    }
+
+    private function slidesFromPptx(string $path): array
+    {
+        if (!class_exists(\ZipArchive::class)) {
+            return [[
+                'number' => 1,
+                'title' => 'Sin vista previa',
+                'body' => ['El servidor no tiene soporte ZIP activo para leer PPTX.'],
+            ]];
+        }
+
+        $zip = new \ZipArchive();
+        if ($zip->open($path) !== true) {
+            return [[
+                'number' => 1,
+                'title' => 'Sin vista previa',
+                'body' => ['No fue posible leer el contenido del PPTX.'],
+            ]];
+        }
+
+        $slides = [];
+        $slideNames = [];
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $name = $zip->getNameIndex($i);
+            if (preg_match('/^ppt\/slides\/slide\d+\.xml$/', $name)) {
+                $slideNames[] = $name;
+            }
+        }
+
+        usort($slideNames, fn ($a, $b) => (int) preg_replace('/\D+/', '', $a) <=> (int) preg_replace('/\D+/', '', $b));
+
+        foreach ($slideNames as $index => $name) {
+            $paragraphs = $this->pptxParagraphs($zip->getFromName($name) ?: '');
+            $slides[] = [
+                'number' => $index + 1,
+                'title' => $paragraphs[0] ?? 'Diapositiva ' . ($index + 1),
+                'body' => array_slice($paragraphs, 1),
+            ];
+        }
+
+        $zip->close();
+
+        return $slides;
+    }
+
+    private function pptxParagraphs(string $slideXml): array
+    {
+        $paragraphs = [];
+        preg_match_all('/<a:p\b[^>]*>(.*?)<\/a:p>/s', $slideXml, $matches);
+
+        foreach ($matches[1] as $paragraphXml) {
+            preg_match_all('/<a:t[^>]*>(.*?)<\/a:t>/s', $paragraphXml, $textMatches);
+            $text = trim(html_entity_decode(implode('', $textMatches[1])));
+            if ($text !== '') {
+                $paragraphs[] = $text;
+            }
+        }
+
+        return $paragraphs;
+    }
+
+    private function officeXmlText(string $xml): string
+    {
+        preg_match_all('/<t[^>]*>(.*?)<\/t>/s', $xml, $matches);
+        $text = $matches[1] ? implode(' ', $matches[1]) : strip_tags($xml);
+        return trim(html_entity_decode($text));
     }
 
     private function renewalAttributesFromRequest(Request $request): array
