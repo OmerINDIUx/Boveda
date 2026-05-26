@@ -14,10 +14,12 @@ use App\Models\User;
 use App\Models\ApprovalRequest;
 use App\Models\ApprovalWorkflow;
 use App\Models\Rfi;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
 
 class ProjectController extends Controller 
@@ -246,12 +248,20 @@ class ProjectController extends Controller
                 'revision_code' => 'required|string',
                 'status' => 'required|string',
                 'notes' => 'nullable|string',
-                'confidentiality_level' => 'nullable|string|in:public,internal,restricted,confidential'
+                'confidentiality_level' => 'nullable|string|in:public,internal,restricted,confidential',
+                'is_renewable' => 'nullable|boolean',
+                'renewal_frequency' => 'exclude_unless:is_renewable,1|required|string|in:once,weekly,monthly,yearly',
+                'renewal_due_date' => 'exclude_unless:is_renewable,1|nullable|required_if:renewal_frequency,once|date',
+                'renewal_weekday' => 'exclude_unless:is_renewable,1|nullable|required_if:renewal_frequency,weekly|integer|between:1,7',
+                'renewal_month_day' => 'exclude_unless:is_renewable,1|nullable|required_if:renewal_frequency,monthly,yearly|integer|between:1,31',
+                'renewal_month' => 'exclude_unless:is_renewable,1|nullable|required_if:renewal_frequency,yearly|integer|between:1,12',
+                'renewal_notes' => 'nullable|string',
             ]);
 
             $file = $request->file('file');
             $originalName = $file->getClientOriginalName();
             $docNum = $request->document_number;
+            $renewalAttributes = $this->renewalAttributesFromRequest($request);
             
             // 1. Find or Create the Document Identity
             $document = Document::firstOrCreate(
@@ -261,15 +271,16 @@ class ProjectController extends Controller
                     'folder_id' => $request->folder_id,
                     'title' => $request->title,
                     'status' => 'ACTIVO',
-                    'confidentiality_level' => $request->confidentiality_level ?? 'public'
-                ]
+                    'confidentiality_level' => $request->confidentiality_level ?? 'public',
+                ] + $renewalAttributes
             );
 
-            // Update confidentiality if changed
-            if ($request->has('confidentiality_level') && $document->confidentiality_level !== $request->confidentiality_level) {
-                $document->confidentiality_level = $request->confidentiality_level;
-                $document->save();
-            }
+            $document->fill([
+                'discipline_id' => $request->discipline_id,
+                'folder_id' => $request->folder_id,
+                'title' => $request->title,
+                'confidentiality_level' => $request->confidentiality_level ?? 'public',
+            ] + $renewalAttributes)->save();
 
             if ($document->is_locked) {
                 return back()->withErrors(['upload_error' => 'El documento está BLOQUEADO por un proceso de aprobación activo.'])->withInput();
@@ -280,7 +291,10 @@ class ProjectController extends Controller
 
             // 3. Store the physical file
             $discipline = Discipline::find($request->discipline_id);
-            $fileName = $docNum . "_REV_" . $request->revision_code . "." . $file->getClientOriginalExtension();
+            $extension = $file->getClientOriginalExtension();
+            $safeDocNum = Str::of($docNum)->replaceMatches('/[^A-Za-z0-9._-]/', '_');
+            $safeRevision = Str::of($request->revision_code)->replaceMatches('/[^A-Za-z0-9._-]/', '_');
+            $fileName = "{$safeDocNum}_REV_{$safeRevision}" . ($extension ? ".{$extension}" : '');
             $storagePath = "projects/{$project->id}/{$discipline->prefix}/{$fileName}";
             
             $stored = Storage::disk('public')->putFileAs("projects/{$project->id}/{$discipline->prefix}", $file, $fileName);
@@ -296,7 +310,7 @@ class ProjectController extends Controller
                 'status' => $request->status,
                 'file_path' => $storagePath,
                 'original_name' => $originalName,
-                'extension' => $file->getClientOriginalExtension(),
+                'extension' => $extension ?: 'archivo',
                 'size' => $file->getSize(),
                 'user_id' => Auth::id() ?? User::first()?->id,
                 'change_notes' => $request->notes,
@@ -318,6 +332,147 @@ class ProjectController extends Controller
             Log::error("Error en upload: " . $e->getMessage());
             return back()->withErrors(['upload_error' => 'Error crítico: ' . $e->getMessage()])->withInput();
         }
+    }
+
+    public function updateDocument(Request $request, Document $document)
+    {
+        $request->validate([
+            'document_number' => [
+                'required',
+                'string',
+                Rule::unique('documents', 'document_number')
+                    ->where('project_id', $document->project_id)
+                    ->ignore($document->id),
+            ],
+            'title' => 'required|string',
+            'discipline_id' => 'required|exists:disciplines,id',
+            'folder_id' => 'nullable|exists:folders,id',
+            'status' => 'nullable|string',
+            'confidentiality_level' => 'nullable|string|in:public,internal,restricted,confidential',
+            'is_renewable' => 'nullable|boolean',
+            'renewal_frequency' => 'exclude_unless:is_renewable,1|required|string|in:once,weekly,monthly,yearly',
+            'renewal_due_date' => 'exclude_unless:is_renewable,1|nullable|required_if:renewal_frequency,once|date',
+            'renewal_weekday' => 'exclude_unless:is_renewable,1|nullable|required_if:renewal_frequency,weekly|integer|between:1,7',
+            'renewal_month_day' => 'exclude_unless:is_renewable,1|nullable|required_if:renewal_frequency,monthly,yearly|integer|between:1,31',
+            'renewal_month' => 'exclude_unless:is_renewable,1|nullable|required_if:renewal_frequency,yearly|integer|between:1,12',
+            'renewal_notes' => 'nullable|string',
+        ]);
+
+        $renewalAttributes = $this->renewalAttributesFromRequest($request);
+
+        $document->update([
+            'document_number' => $request->document_number,
+            'title' => $request->title,
+            'discipline_id' => $request->discipline_id,
+            'folder_id' => $request->folder_id,
+            'status' => $request->status ?? $document->status,
+            'confidentiality_level' => $request->confidentiality_level ?? 'public',
+        ] + $renewalAttributes);
+
+        AuditLog::create([
+            'user_id' => Auth::id() ?? User::first()?->id,
+            'action' => 'DOCUMENT_UPDATED',
+            'model_type' => Document::class,
+            'model_id' => $document->id,
+            'details' => "Metadatos del documento {$document->document_number} actualizados.",
+            'ip_address' => $request->ip()
+        ]);
+
+        return redirect()
+            ->route('projects.show', $document->project_id)
+            ->with('success', 'Documento actualizado correctamente.');
+    }
+
+    public function editDocument(Document $document)
+    {
+        $document->load(['project', 'discipline']);
+        $project = $document->project;
+        $disciplines = $project->disciplines()->orderBy('name')->get();
+        $folders = $project->folders()->orderBy('name')->get();
+
+        return view('documents.edit', compact('document', 'project', 'disciplines', 'folders'));
+    }
+
+    private function renewalAttributesFromRequest(Request $request): array
+    {
+        if (!$request->boolean('is_renewable')) {
+            return [
+                'is_renewable' => false,
+                'renewal_frequency' => null,
+                'renewal_weekday' => null,
+                'renewal_month_day' => null,
+                'renewal_month' => null,
+                'renewal_due_date' => null,
+                'renewal_notes' => null,
+            ];
+        }
+
+        $frequency = $request->renewal_frequency ?? 'once';
+        $weekday = $frequency === 'weekly' ? (int) $request->renewal_weekday : null;
+        $monthDay = in_array($frequency, ['monthly', 'yearly'], true) ? (int) $request->renewal_month_day : null;
+        $month = $frequency === 'yearly' ? (int) $request->renewal_month : null;
+
+        return [
+            'is_renewable' => true,
+            'renewal_frequency' => $frequency,
+            'renewal_weekday' => $weekday,
+            'renewal_month_day' => $monthDay,
+            'renewal_month' => $month,
+            'renewal_due_date' => $this->nextRenewalDate($request, $frequency),
+            'renewal_notes' => $request->renewal_notes,
+        ];
+    }
+
+    private function nextRenewalDate(Request $request, string $frequency): ?string
+    {
+        $today = Carbon::today();
+
+        if ($frequency === 'once') {
+            return $request->renewal_due_date ? Carbon::parse($request->renewal_due_date)->toDateString() : null;
+        }
+
+        if ($frequency === 'weekly') {
+            $weekday = (int) $request->renewal_weekday;
+            $daysToAdd = ($weekday - $today->dayOfWeekIso + 7) % 7;
+            return $today->copy()->addDays($daysToAdd)->toDateString();
+        }
+
+        if ($frequency === 'monthly') {
+            return $this->nextMonthlyRenewalDate((int) $request->renewal_month_day)->toDateString();
+        }
+
+        if ($frequency === 'yearly') {
+            return $this->nextYearlyRenewalDate((int) $request->renewal_month, (int) $request->renewal_month_day)->toDateString();
+        }
+
+        return null;
+    }
+
+    private function nextMonthlyRenewalDate(int $monthDay): Carbon
+    {
+        $today = Carbon::today();
+        $candidate = $today->copy()->day(min($monthDay, $today->daysInMonth));
+
+        if ($candidate->lt($today)) {
+            $candidate = $today->copy()->addMonthNoOverflow()->startOfMonth();
+            $candidate->day(min($monthDay, $candidate->daysInMonth));
+        }
+
+        return $candidate;
+    }
+
+    private function nextYearlyRenewalDate(int $month, int $monthDay): Carbon
+    {
+        $today = Carbon::today();
+        $candidate = Carbon::create($today->year, $month, 1);
+        $candidate->day(min($monthDay, $candidate->daysInMonth));
+
+        if ($candidate->lt($today)) {
+            $candidate = Carbon::create($today->year + 1, $month, 1);
+            $candidate->day(min($monthDay, $candidate->daysInMonth));
+        }
+
+        return $candidate;
     }
 
     public function history(Document $document)

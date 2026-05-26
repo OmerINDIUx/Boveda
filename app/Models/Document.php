@@ -17,7 +17,19 @@ class Document extends Model
         'status',
         'is_locked',
         'approval_status',
-        'confidentiality_level'
+        'confidentiality_level',
+        'is_renewable',
+        'renewal_frequency',
+        'renewal_weekday',
+        'renewal_month_day',
+        'renewal_month',
+        'renewal_due_date',
+        'renewal_notes',
+    ];
+
+    protected $casts = [
+        'is_renewable' => 'boolean',
+        'renewal_due_date' => 'date',
     ];
 
     public function scopeVisibleTo($query, User $user)

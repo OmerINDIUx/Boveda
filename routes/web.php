@@ -28,6 +28,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/projects/{project}/transmittals', [ProjectController::class, 'sendTransmittal'])->name('projects.transmittals.send');
     Route::post('/documents/{document}/log-view', [ProjectController::class, 'logView'])->name('documents.log-view');
     Route::get('/documents/{document}/history', [ProjectController::class, 'history'])->name('documents.history');
+    Route::get('/documents/{document}/edit', [ProjectController::class, 'editDocument'])->name('documents.edit');
+    Route::patch('/documents/{document}', [ProjectController::class, 'updateDocument'])->name('documents.update');
     Route::post('/documents/{document}/toggle-lock', [ProjectController::class, 'toggleLock'])->name('documents.toggle-lock');
     Route::post('/revisions/{revision}/note', [ProjectController::class, 'addRevisionNote'])->name('revisions.note');
     Route::post('/notes/{note}/update', [ProjectController::class, 'updateRevisionNote'])->name('notes.update');

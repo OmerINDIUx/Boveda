@@ -113,6 +113,35 @@
         </div>
 
         @php
+            $renewalFrequencyLabels = [
+                'once' => 'Una sola vez',
+                'weekly' => 'Semanal',
+                'monthly' => 'Mensual',
+                'yearly' => 'Anual',
+            ];
+            $renewalWeekdayLabels = [
+                1 => 'Lunes',
+                2 => 'Martes',
+                3 => 'Miércoles',
+                4 => 'Jueves',
+                5 => 'Viernes',
+                6 => 'Sábado',
+                7 => 'Domingo',
+            ];
+            $renewalMonthLabels = [
+                1 => 'Enero',
+                2 => 'Febrero',
+                3 => 'Marzo',
+                4 => 'Abril',
+                5 => 'Mayo',
+                6 => 'Junio',
+                7 => 'Julio',
+                8 => 'Agosto',
+                9 => 'Septiembre',
+                10 => 'Octubre',
+                11 => 'Noviembre',
+                12 => 'Diciembre',
+            ];
             $stageLabels = [
                 'planeacion' => 'Planeación',
                 'diseno' => 'Diseño',
@@ -160,13 +189,14 @@
             <form id="bulkForm" action="{{ route('projects.transmittals.send', $project->id) }}" method="POST">
                 @csrf
                 <div class="data-grid">
-                    <div class="doc-row header-row" style="position: sticky; top: 0; background: #f8fafc; z-index: 10; grid-template-columns: 40px 140px 2fr 120px 80px 120px;">
+                    <div class="doc-row header-row" style="position: sticky; top: 0; background: #f8fafc; z-index: 10; grid-template-columns: 40px 140px 2fr 120px 80px 120px 96px;">
                         <div style="text-align: center;"><input type="checkbox" onclick="toggleAll(this)"></div>
                         <div>ID TÉCNICO</div>
                         <div>TÍTULO DEL DOCUMENTO</div>
                         <div>DISCIPLINA</div>
                         <div>REV</div>
                         <div>ESTADO</div>
+                        <div>RENOVACIÓN</div>
                     </div>
 
                     <!-- FOLDERS IN MAIN GRID -->
@@ -175,12 +205,13 @@
                         <div class="doc-row folder-row" 
                              data-discipline="{{ $d->name }}" 
                              data-folder-id-parent=""
-                             style="grid-template-columns: 40px 140px 2fr 120px 80px 120px; background: #f1f5f9; display: none;"
+                             style="grid-template-columns: 40px 140px 2fr 120px 80px 120px 96px; background: #f1f5f9; display: none;"
                              onclick="filterByFolder('{{ $f->id }}', document.querySelector('.folder-item[data-folder-id=\'{{ $f->id }}\']'))">
                             <div style="text-align: center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="#64748b" stroke="none"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></div>
                             <div style="font-weight: 800; color: #64748b; font-size: 0.7rem;">CARPETA</div>
                             <div style="font-weight: 800; color: #1e293b;">{{ $f->name }}</div>
                             <div style="font-size: 0.75rem; font-weight: 600;">{{ $d->prefix }}</div>
+                            <div style="text-align: center;">-</div>
                             <div style="text-align: center;">-</div>
                             <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
                                 <button onclick="event.stopPropagation(); openRenameFolderModal('{{ $f->id }}', '{{ $f->name }}')" class="btn-tool" style="font-size: 0.8rem;" title="Renombrar">✏️</button>
@@ -191,13 +222,23 @@
                     @endforeach
                     
                     @foreach($documents as $doc)
-                    @php $v = $doc->latestRevision; @endphp
+                    @php
+                        $v = $doc->latestRevision;
+                        $renewalRule = $renewalFrequencyLabels[$doc->renewal_frequency] ?? 'Renovable';
+                        if ($doc->renewal_frequency === 'weekly' && $doc->renewal_weekday) {
+                            $renewalRule .= ' · ' . ($renewalWeekdayLabels[$doc->renewal_weekday] ?? '');
+                        } elseif ($doc->renewal_frequency === 'monthly' && $doc->renewal_month_day) {
+                            $renewalRule .= ' · día ' . $doc->renewal_month_day;
+                        } elseif ($doc->renewal_frequency === 'yearly' && $doc->renewal_month && $doc->renewal_month_day) {
+                            $renewalRule .= ' · ' . $doc->renewal_month_day . ' de ' . ($renewalMonthLabels[$doc->renewal_month] ?? '');
+                        }
+                    @endphp
                     <div class="doc-row" 
                          draggable="true" 
                          data-doc-id="{{ $doc->id }}"
                          data-discipline="{{ $doc->discipline->name }}" 
                          data-folder-id="{{ $doc->folder_id ?? '' }}"
-                         style="grid-template-columns: 40px 140px 2fr 120px 80px 120px;" 
+                         style="grid-template-columns: 40px 140px 2fr 120px 80px 120px 96px;" 
                          onclick="openUltraTraceabilityPanel('{{ $doc->id }}', '{{ $doc->title }}', '{{ $doc->document_number }}', '{{ $v->revision_code ?? '-' }}', '{{ $v->status ?? '-' }}', '{{ $doc->discipline->name }}', '{{ $v ? $v->created_at->format('d/m/Y H:i') : '-' }}', '{{ $v ? asset('storage/'.$v->file_path) : '' }}')"
                          ondragstart="onDragStart(event)">
                         <div style="text-align: center;" onclick="event.stopPropagation()"><input type="checkbox" name="document_ids[]" value="{{ $doc->id }}" onchange="updateBulkUI()"></div>
@@ -218,6 +259,16 @@
                             <span class="status-pill pill-{{ str_contains($v->status ?? '', 'Approved') ? 'approved' : (str_contains($v->status ?? '', 'Review') ? 'review' : 'draft') }}">
                                 {{ $v->status ?? 'Draft' }}
                             </span>
+                        </div>
+                        <div style="display: flex; justify-content: flex-end; align-items: center; gap: 0.35rem;">
+                            @if($doc->is_renewable)
+                                <span class="status-pill pill-{{ $doc->renewal_due_date && $doc->renewal_due_date->isPast() ? 'draft' : 'review' }}" title="Renovar {{ $doc->renewal_due_date ? $doc->renewal_due_date->format('d/m/Y') : 'sin fecha' }}">
+                                    {{ $renewalRule }} · prox. {{ $doc->renewal_due_date ? $doc->renewal_due_date->format('d/m/Y') : 'sin fecha' }}
+                                </span>
+                            @else
+                                <span style="font-size: 0.7rem; color: #94a3b8; font-weight: 700;">No</span>
+                            @endif
+                            <a href="{{ route('documents.edit', $doc->id) }}" onclick="event.stopPropagation();" class="btn-tool" style="font-size: 0.8rem; color: var(--primary); text-decoration: none;" title="Editar Documento">✏️</a>
                             <button onclick="event.stopPropagation(); deleteDocument('{{ $doc->id }}')" class="btn-tool" style="font-size: 0.8rem; color: #ef4444;" title="Eliminar Documento">🗑️</button>
                         </div>
                     </div>
@@ -260,7 +311,7 @@
                 </div>
             </div>
             <div id="viewerToolbar" style="padding: 0.75rem 1.5rem; background: #f8fafc; border-top: 1px solid var(--border); display: none; gap: 2rem; align-items: center; justify-content: space-between; flex-wrap: wrap;">
-                <div style="display: flex; gap: 1.25rem; align-items: center;">
+                <div id="markupToolsGroup" style="display: flex; gap: 1.25rem; align-items: center;">
                     <!-- Tools -->
                     <div style="display: flex; gap: 0.25rem; background: white; padding: 0.25rem; border-radius: 8px; border: 1px solid #e2e8f0;">
                         <button onclick="setTool('pen')" id="toolPen" class="btn-tool active" title="Lápiz">✏️</button>
@@ -517,15 +568,67 @@
                         <p style="font-size: 0.7rem; color: #94a3b8; margin-top: 0.5rem;">Afecta quién puede visualizar o descargar este documento en el visor.</p>
                     </div>
 
+                    <div style="margin-bottom: 1.5rem; padding: 1rem; border: 1px solid #e2e8f0; border-radius: 12px; background: #f8fafc;">
+                        <label style="display: flex; align-items: center; gap: 0.65rem; font-size: 0.78rem; font-weight: 800; color: #334155;">
+                            <input type="checkbox" name="is_renewable" value="1" onchange="toggleRenewalFields(this, 'uploadRenewalFields')">
+                            Archivo de carga renovable
+                        </label>
+                        <div id="uploadRenewalFields" style="display: none; margin-top: 1rem; gap: 0.75rem; flex-direction: column;">
+                            <div>
+                                <label class="input-label">Frecuencia de renovación</label>
+                                <select name="renewal_frequency" id="uploadRenewalFrequency" class="modal-input" data-renewal-required onchange="updateRenewalScheduleFields('upload')">
+                                    <option value="once">Una sola vez</option>
+                                    <option value="weekly">Semanal</option>
+                                    <option value="monthly">Mensual</option>
+                                    <option value="yearly">Anual</option>
+                                </select>
+                            </div>
+                            <div data-renewal-group="upload-once">
+                                <label class="input-label">Fecha de renovación</label>
+                                <input type="date" name="renewal_due_date" class="modal-input" data-renewal-required>
+                            </div>
+                            <div data-renewal-group="upload-weekly" style="display: none;">
+                                <label class="input-label">Día de la semana</label>
+                                <select name="renewal_weekday" class="modal-input" data-renewal-required disabled>
+                                    @foreach($renewalWeekdayLabels as $value => $label)
+                                        <option value="{{ $value }}">{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div data-renewal-group="upload-monthly" style="display: none;">
+                                <label class="input-label">Día del mes</label>
+                                <input type="number" name="renewal_month_day" class="modal-input" min="1" max="31" value="1" data-renewal-required disabled>
+                            </div>
+                            <div data-renewal-group="upload-yearly" style="display: none; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                                <div>
+                                    <label class="input-label">Mes</label>
+                                    <select name="renewal_month" class="modal-input" data-renewal-required disabled>
+                                        @foreach($renewalMonthLabels as $value => $label)
+                                            <option value="{{ $value }}">{{ $label }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="input-label">Día</label>
+                                    <input type="number" name="renewal_month_day" class="modal-input" min="1" max="31" value="1" data-renewal-required disabled>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="input-label">Notas de renovación</label>
+                                <textarea name="renewal_notes" class="modal-input" rows="2" placeholder="Ej: renovar póliza, permiso, licencia o certificado antes de vencer"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
                     <div style="flex-grow: 1;">
-                        <label class="input-label">Archivo PDF a procesar</label>
+                        <label class="input-label">Archivo a procesar</label>
                         <div class="file-dropzone" id="dropzoneArea">
-                            <input type="file" name="file" id="fileInput" accept="application/pdf" required onchange="updateFileName(this)">
+                            <input type="file" name="file" id="fileInput" required onchange="updateFileName(this)">
                             <div style="margin-bottom: 0.75rem; color: var(--primary);">
                                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin: 0 auto;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
                             </div>
-                            <p style="font-size: 0.9rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.25rem;">Arrastra tu PDF aquí o haz clic para explorar</p>
-                            <p id="fileNameDisplay" style="font-size: 0.75rem; color: #64748b;">Máximo 50MB. Solo formato .pdf</p>
+                            <p style="font-size: 0.9rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.25rem;">Arrastra tu archivo aquí o haz clic para explorar</p>
+                            <p id="fileNameDisplay" style="font-size: 0.75rem; color: #64748b;">Se permiten todos los tipos de archivo.</p>
                         </div>
                     </div>
                 </div>
@@ -538,6 +641,7 @@
         </form>
     </div>
 </div>
+
 <script>
     function updateFileName(input) {
         const display = document.getElementById('fileNameDisplay');
@@ -549,13 +653,37 @@
             dropzone.style.borderColor = 'var(--primary)';
             dropzone.style.background = '#eef2ff';
         } else {
-            display.textContent = 'Máximo 50MB. Solo formato .pdf';
+            display.textContent = 'Se permiten todos los tipos de archivo.';
             display.style.color = '#64748b';
             display.style.fontWeight = 'normal';
             dropzone.style.borderColor = '#cbd5e1';
             dropzone.style.background = '#f8fafc';
         }
     }
+
+    function toggleRenewalFields(checkbox, containerId) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        container.style.display = checkbox.checked ? 'flex' : 'none';
+        updateRenewalScheduleFields('upload');
+    }
+
+    function updateRenewalScheduleFields(prefix) {
+        const frequency = document.getElementById(`${prefix}RenewalFrequency`)?.value || 'once';
+
+        document.querySelectorAll(`[data-renewal-group^="${prefix}-"]`).forEach(group => {
+            const isActive = group.getAttribute('data-renewal-group') === `${prefix}-${frequency}`;
+            group.style.display = isActive
+                ? (frequency === 'yearly' ? 'grid' : 'block')
+                : 'none';
+
+            group.querySelectorAll('input, select').forEach(input => {
+                input.disabled = !isActive;
+                input.required = isActive;
+            });
+        });
+    }
+
     function filterDiscipline(discipline, element) {
         event.preventDefault();
         resetActiveFilters();
@@ -967,13 +1095,18 @@
             document.getElementById('viewerToolbar').style.display = 'none';
             document.getElementById('loadingVault').style.display = 'flex';
             
-            const isPdf = fileUrl.toLowerCase().endsWith('.pdf');
+            const lowerUrl = fileUrl.toLowerCase().split('?')[0];
+            const isPdf = lowerUrl.endsWith('.pdf');
+            const isImage = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'].some(ext => lowerUrl.endsWith(ext));
             document.getElementById('pdfNav').style.display = isPdf ? 'flex' : 'none';
+            document.getElementById('markupToolsGroup').style.display = (isPdf || isImage) ? 'flex' : 'none';
 
             if (isPdf) {
                 loadPDF(fileUrl);
-            } else {
+            } else if (isImage) {
                 loadImage(fileUrl);
+            } else {
+                showGenericFile(fileUrl);
             }
         }
 
@@ -1008,6 +1141,19 @@
             document.getElementById('loadingVault').style.display = 'none';
             alert("Error al cargar PDF: " + err.message);
         });
+    }
+
+    function showGenericFile(url) {
+        document.getElementById('loadingVault').style.display = 'none';
+        document.getElementById('canvasWrapper').style.display = 'none';
+        document.getElementById('imageWrapper').style.display = 'none';
+        document.getElementById('viewerToolbar').style.display = 'flex';
+        document.getElementById('viewerPlaceholder').style.display = 'flex';
+        document.getElementById('viewerPlaceholder').innerHTML = `
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+            <p style="font-size: 0.85rem; opacity: 0.85; text-align: center;">Este tipo de archivo no tiene vista previa integrada.</p>
+            <a href="${url}" target="_blank" class="btn-modern" style="text-decoration: none; padding: 0.65rem 1rem; font-size: 0.75rem;">ABRIR O DESCARGAR</a>
+        `;
     }
 
     function changePage(delta) {
@@ -1191,7 +1337,56 @@
 
         let html = '';
         if(currentTab === 'history') {
-            html = '<h4 style="font-size: 0.7rem; color: #94a3b8; margin-bottom: 1rem;">HISTORIAL DE REVISIONES</h4>';
+            const renewalDue = currentData.document.renewal_due_date
+                ? new Date(currentData.document.renewal_due_date).toLocaleDateString('es-MX', {day:'2-digit', month:'2-digit', year:'numeric'})
+                : 'Sin fecha';
+            const renewalFrequencyLabels = {
+                once: 'Una sola vez',
+                weekly: 'Semanal',
+                monthly: 'Mensual',
+                yearly: 'Anual'
+            };
+            const renewalWeekdayLabels = {
+                1: 'Lunes',
+                2: 'Martes',
+                3: 'Miércoles',
+                4: 'Jueves',
+                5: 'Viernes',
+                6: 'Sábado',
+                7: 'Domingo'
+            };
+            const renewalMonthLabels = {
+                1: 'Enero',
+                2: 'Febrero',
+                3: 'Marzo',
+                4: 'Abril',
+                5: 'Mayo',
+                6: 'Junio',
+                7: 'Julio',
+                8: 'Agosto',
+                9: 'Septiembre',
+                10: 'Octubre',
+                11: 'Noviembre',
+                12: 'Diciembre'
+            };
+            let renewalFrequency = renewalFrequencyLabels[currentData.document.renewal_frequency] || 'Sin frecuencia';
+            if (currentData.document.renewal_frequency === 'weekly' && currentData.document.renewal_weekday) {
+                renewalFrequency += ` · ${renewalWeekdayLabels[currentData.document.renewal_weekday]}`;
+            } else if (currentData.document.renewal_frequency === 'monthly' && currentData.document.renewal_month_day) {
+                renewalFrequency += ` · día ${currentData.document.renewal_month_day}`;
+            } else if (currentData.document.renewal_frequency === 'yearly' && currentData.document.renewal_month && currentData.document.renewal_month_day) {
+                renewalFrequency += ` · ${currentData.document.renewal_month_day} de ${renewalMonthLabels[currentData.document.renewal_month]}`;
+            }
+            html = `
+                <div style="padding: 1rem; border: 1px solid ${currentData.document.is_renewable ? '#fde68a' : '#e2e8f0'}; border-radius: 12px; margin-bottom: 1rem; background: ${currentData.document.is_renewable ? '#fffbeb' : '#f8fafc'};">
+                    <div style="font-size: 0.68rem; color: #64748b; font-weight: 800; text-transform: uppercase; margin-bottom: 0.35rem;">Renovación</div>
+                    <div style="font-size: 0.85rem; color: #1e293b; font-weight: 800;">
+                        ${currentData.document.is_renewable ? `${renewalFrequency} · próxima ${renewalDue}` : 'No renovable'}
+                    </div>
+                    ${currentData.document.renewal_notes ? `<div style="font-size: 0.72rem; color: #64748b; margin-top: 0.45rem; line-height: 1.4;">${escapeHtml(currentData.document.renewal_notes)}</div>` : ''}
+                </div>
+                <h4 style="font-size: 0.7rem; color: #94a3b8; margin-bottom: 1rem;">HISTORIAL DE REVISIONES</h4>
+            `;
             currentData.revisions.forEach(v => {
                 html += `
                     <div style="padding: 1.5rem; border: 1px solid #e2e8f0; border-radius: 16px; margin-bottom: 1.5rem; background: white; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
@@ -1327,6 +1522,16 @@
 
     function str_contains(haystack, needle) {
         return haystack && haystack.toLowerCase().includes(needle.toLowerCase());
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, char => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        }[char]));
     }
 
     function toggleNewNoteForm(revId) {
