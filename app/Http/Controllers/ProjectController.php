@@ -116,20 +116,135 @@ class ProjectController extends Controller
 
     public function dashboard(Project $project)
     {
-        // KPIs for RFIs
+        $project->load(['owner', 'manager']);
+        $today = Carbon::today();
+        $soonLimit = $today->copy()->addDays(14);
+
+        $documents = Document::where('project_id', $project->id)
+            ->with(['discipline', 'latestRevision'])
+            ->get();
+
+        $documentIds = $documents->pluck('id');
+        $totalDocuments = $documents->count();
+        $documentsWithRevision = $documents->filter(fn ($document) => (bool) $document->latestRevision)->count();
+
+        $renewableDocuments = $documents->filter(fn ($document) => $document->is_renewable);
+        $overdueRenewals = $renewableDocuments->filter(
+            fn ($document) => $document->renewal_due_date && $document->renewal_due_date->lt($today)
+        );
+        $upcomingRenewals = $renewableDocuments->filter(
+            fn ($document) => $document->renewal_due_date
+                && $document->renewal_due_date->betweenIncluded($today, $soonLimit)
+        );
+        $unscheduledRenewals = $renewableDocuments->filter(fn ($document) => !$document->renewal_due_date);
+        $healthyRenewals = $renewableDocuments->filter(
+            fn ($document) => $document->renewal_due_date && $document->renewal_due_date->gt($soonLimit)
+        );
+        $renewalCompliance = $renewableDocuments->count() > 0
+            ? (int) round((($renewableDocuments->count() - $overdueRenewals->count()) / $renewableDocuments->count()) * 100)
+            : 100;
+        $renewalSemaphore = [
+            'green' => $healthyRenewals->count(),
+            'yellow' => $upcomingRenewals->count(),
+            'red' => $overdueRenewals->count(),
+            'gray' => $unscheduledRenewals->count(),
+            'total' => max(1, $renewableDocuments->count()),
+            'status' => $overdueRenewals->count() > 0
+                ? 'red'
+                : ($upcomingRenewals->count() > 0 || $unscheduledRenewals->count() > 0 ? 'yellow' : 'green'),
+        ];
+
+        $renewalQueue = $renewableDocuments
+            ->sortBy(fn ($document) => $document->renewal_due_date?->timestamp ?? PHP_INT_MAX)
+            ->take(8)
+            ->values();
+
+        $statusBuckets = [
+            'approved' => 0,
+            'review' => 0,
+            'draft' => 0,
+            'other' => 0,
+        ];
+
+        foreach ($documents as $document) {
+            $status = strtolower($document->latestRevision?->status ?? $document->approval_status ?? 'draft');
+            if (str_contains($status, 'approved') || str_contains($status, 'aprob')) {
+                $statusBuckets['approved']++;
+            } elseif (str_contains($status, 'review') || str_contains($status, 'revision') || str_contains($status, 'revisión')) {
+                $statusBuckets['review']++;
+            } elseif (str_contains($status, 'draft') || str_contains($status, 'borrador')) {
+                $statusBuckets['draft']++;
+            } else {
+                $statusBuckets['other']++;
+            }
+        }
+
+        $disciplineBreakdown = $documents
+            ->groupBy(fn ($document) => $document->discipline?->prefix ?? 'S/D')
+            ->map(fn ($items, $prefix) => [
+                'prefix' => $prefix,
+                'name' => $items->first()->discipline?->name ?? 'Sin disciplina',
+                'count' => $items->count(),
+                'renewables' => $items->where('is_renewable', true)->count(),
+                'overdue' => $items->filter(fn ($document) => $document->renewal_due_date && $document->renewal_due_date->lt($today))->count(),
+            ])
+            ->sortByDesc('count')
+            ->take(8)
+            ->values();
+
+        $revisionTrendStart = $today->copy()->subWeeks(7)->startOfWeek();
+        $revisionTrend = FileRevision::whereIn('document_id', $documentIds)
+            ->where('created_at', '>=', $revisionTrendStart)
+            ->get()
+            ->groupBy(fn ($revision) => Carbon::parse($revision->created_at)->startOfWeek()->format('Y-m-d'));
+
+        $revisionTrendLabels = [];
+        $revisionTrendData = [];
+        for ($date = $revisionTrendStart->copy(); $date->lte($today); $date->addWeek()) {
+            $key = $date->format('Y-m-d');
+            $revisionTrendLabels[] = $date->format('d M');
+            $revisionTrendData[] = $revisionTrend->get($key, collect())->count();
+        }
+
+        $approvalRequests = ApprovalRequest::whereHas('fileRevision.document', fn ($query) => $query->where('project_id', $project->id))
+            ->with(['workflow', 'currentStep.user', 'fileRevision.document'])
+            ->latest()
+            ->get();
+
+        $activeApprovals = $approvalRequests->where('status', 'en_revision');
+        $closedApprovals = $approvalRequests->where('status', '!=', 'en_revision');
+        $averageFlowDays = $closedApprovals->count() > 0
+            ? round($closedApprovals->avg(fn ($approval) => max(1, $approval->created_at->diffInDays($approval->updated_at))), 1)
+            : null;
+        $stalledApprovals = $activeApprovals->filter(fn ($approval) => $approval->updated_at->lt($today->copy()->subDays(7)));
+        $pendingApprovals = $activeApprovals->sortBy('updated_at')->take(6)->values();
+
         $rfiStats = [
             'open' => $project->rfis()->where('status', 'open')->count(),
             'closed' => $project->rfis()->where('status', 'closed')->count(),
             'pending' => $project->rfis()->where('status', 'pending')->count(),
+            'urgent' => $project->rfis()->where('priority', 'urgent')->whereIn('status', ['open', 'pending'])->count(),
+            'overdue' => $project->rfis()->whereIn('status', ['open', 'pending'])->whereDate('due_date', '<', $today)->count(),
         ];
 
-        // S-Curve data (Cumulative documents created over time)
-        // Grouping documents by date
-        $docsByDate = Document::where('project_id', $project->id)
-            ->orderBy('created_at')
-            ->get()
+        $openRfis = $project->rfis()
+            ->whereIn('status', ['open', 'pending'])
+            ->orderByRaw('CASE priority WHEN "urgent" THEN 1 WHEN "high" THEN 2 WHEN "medium" THEN 3 ELSE 4 END')
+            ->orderBy('due_date')
+            ->take(6)
+            ->get();
+
+        $transmittals = Transmittal::where('project_id', $project->id)->latest()->get();
+        $emailStats = [
+            'total' => EmailLog::where('project_id', $project->id)->count(),
+            'unread' => EmailLog::where('project_id', $project->id)->where('is_read', false)->count(),
+            'important' => EmailLog::where('project_id', $project->id)->where('is_important', true)->count(),
+        ];
+
+        $docsByDate = $documents
+            ->sortBy('created_at')
             ->groupBy(function($val) {
-                return \Carbon\Carbon::parse($val->created_at)->format('Y-m-d');
+                return Carbon::parse($val->created_at)->format('Y-m-d');
             });
 
         $sCurveLabels = [];
@@ -142,8 +257,6 @@ class ProjectController extends Controller
             $sCurveData[] = $cumulative;
         }
 
-        // Extended Audit Trail (Read tracking)
-        $documentIds = Document::where('project_id', $project->id)->pluck('id');
         $readAudits = AuditLog::where('action', 'DOCUMENT_READ')
             ->where('model_type', Document::class)
             ->whereIn('model_id', $documentIds)
@@ -156,7 +269,83 @@ class ProjectController extends Controller
         $userIds = $readAudits->pluck('user_id')->filter()->unique();
         $users = User::whereIn('id', $userIds)->get()->keyBy('id');
 
-        return view('projects.dashboard', compact('project', 'rfiStats', 'sCurveLabels', 'sCurveData', 'readAudits', 'users'));
+        $recentActivity = AuditLog::where(function ($query) use ($project, $documentIds) {
+                $query->where('model_type', Project::class)->where('model_id', $project->id);
+                if ($documentIds->isNotEmpty()) {
+                    $query->orWhere(fn ($scope) => $scope
+                        ->where('model_type', Document::class)
+                        ->whereIn('model_id', $documentIds));
+                }
+            })
+            ->with('user')
+            ->latest()
+            ->take(12)
+            ->get();
+
+        $executiveAlerts = collect();
+        if ($overdueRenewals->count() > 0) {
+            $executiveAlerts->push([
+                'level' => 'danger',
+                'title' => 'Renovaciones vencidas',
+                'detail' => $overdueRenewals->count() . ' archivo(s) renovables requieren actualización.',
+            ]);
+        }
+        if ($stalledApprovals->count() > 0) {
+            $executiveAlerts->push([
+                'level' => 'warning',
+                'title' => 'Flujos detenidos',
+                'detail' => $stalledApprovals->count() . ' aprobación(es) llevan más de 7 días sin movimiento.',
+            ]);
+        }
+        if ($rfiStats['overdue'] > 0) {
+            $executiveAlerts->push([
+                'level' => 'danger',
+                'title' => 'RFIs vencidos',
+                'detail' => $rfiStats['overdue'] . ' consulta(s) técnicas pasaron su fecha compromiso.',
+            ]);
+        }
+        if ($totalDocuments === 0) {
+            $executiveAlerts->push([
+                'level' => 'neutral',
+                'title' => 'Sin carga documental',
+                'detail' => 'El proyecto todavía no tiene archivos registrados.',
+            ]);
+        }
+
+        $dashboardStats = [
+            'total_documents' => $totalDocuments,
+            'documents_with_revision' => $documentsWithRevision,
+            'renewable_documents' => $renewableDocuments->count(),
+            'overdue_renewals' => $overdueRenewals->count(),
+            'upcoming_renewals' => $upcomingRenewals->count(),
+            'renewal_compliance' => $renewalCompliance,
+            'active_approvals' => $activeApprovals->count(),
+            'stalled_approvals' => $stalledApprovals->count(),
+            'average_flow_days' => $averageFlowDays,
+            'transmittals_total' => $transmittals->count(),
+            'transmittals_30d' => $transmittals->where('created_at', '>=', $today->copy()->subDays(30))->count(),
+        ];
+
+        return view('projects.dashboard', compact(
+            'project',
+            'rfiStats',
+            'sCurveLabels',
+            'sCurveData',
+            'readAudits',
+            'users',
+            'dashboardStats',
+            'renewalSemaphore',
+            'statusBuckets',
+            'disciplineBreakdown',
+            'revisionTrendLabels',
+            'revisionTrendData',
+            'renewalQueue',
+            'pendingApprovals',
+            'openRfis',
+            'emailStats',
+            'recentActivity',
+            'executiveAlerts'
+        ));
     }
 
     public function store(Request $request)
@@ -599,11 +788,16 @@ class ProjectController extends Controller
             'project',
             'discipline',
             'latestRevision.notes.user',
+            'latestRevision.markups.user',
             'latestRevision.approvalRequests.currentStep.user',
+            'latestRevision.approvalRequests.reviews.step',
+            'latestRevision.approvalRequests.reviews.reviewer',
             'latestRevision.approvalRequests.workflow.steps.user',
             'revisions.notes.user',
+            'revisions.markups.user',
             'revisions.approvalRequests.currentStep.user',
-            'revisions.approvalRequests.workflow',
+            'revisions.approvalRequests.workflow.steps.user',
+            'revisions.approvalRequests.reviews',
         ]);
         $revision = $document->latestRevision;
         $preview = $this->buildDocumentPreview($revision);
@@ -1257,6 +1451,61 @@ class ProjectController extends Controller
         return response()->json([
             'status' => 'success',
             'note' => $note->load('user')
+        ]);
+    }
+
+    public function storeRevisionMarkups(Request $request, FileRevision $revision)
+    {
+        $data = $request->validate([
+            'markups' => 'required|array|min:1',
+            'markups.*.page_number' => 'required|integer|min:1',
+            'markups.*.tool' => 'required|string|max:40',
+            'markups.*.label' => 'nullable|string|max:255',
+            'markups.*.comment' => 'nullable|string',
+            'markups.*.x_percent' => 'nullable|numeric|min:0|max:100',
+            'markups.*.y_percent' => 'nullable|numeric|min:0|max:100',
+            'markups.*.color' => 'nullable|string|max:20',
+            'markups.*.stroke_width' => 'nullable|integer|min:1|max:80',
+            'snapshot' => 'nullable|string',
+        ]);
+
+        $snapshotPath = null;
+        if (!empty($data['snapshot']) && preg_match('/^data:image\/png;base64,/', $data['snapshot'])) {
+            $rawImage = base64_decode(substr($data['snapshot'], strpos($data['snapshot'], ',') + 1), true);
+            if ($rawImage !== false) {
+                $snapshotPath = 'markups/revision-' . $revision->id . '/' . now()->format('YmdHis') . '-' . uniqid() . '.png';
+                Storage::disk('public')->put($snapshotPath, $rawImage);
+            }
+        }
+
+        $created = collect($data['markups'])->map(function (array $markup) use ($revision, $snapshotPath) {
+            return \App\Models\RevisionMarkup::create([
+                'file_revision_id' => $revision->id,
+                'user_id' => Auth::id() ?? User::first()?->id,
+                'page_number' => $markup['page_number'],
+                'tool' => $markup['tool'],
+                'label' => $markup['label'] ?? null,
+                'comment' => $markup['comment'] ?? null,
+                'x_percent' => $markup['x_percent'] ?? null,
+                'y_percent' => $markup['y_percent'] ?? null,
+                'color' => $markup['color'] ?? null,
+                'stroke_width' => $markup['stroke_width'] ?? null,
+                'snapshot_path' => $snapshotPath,
+            ]);
+        });
+
+        AuditLog::create([
+            'user_id' => Auth::id() ?? User::first()?->id,
+            'action' => 'REVISION_MARKUP_SAVED',
+            'model_type' => FileRevision::class,
+            'model_id' => $revision->id,
+            'details' => 'Se guardaron ' . $created->count() . ' anotaciones sobre la revisión.',
+            'ip_address' => $request->ip()
+        ]);
+
+        return response()->json([
+            'status' => 'success',
+            'markups' => $created->map(fn ($markup) => $markup->load('user'))->values(),
         ]);
     }
 

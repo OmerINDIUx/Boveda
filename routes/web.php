@@ -36,6 +36,7 @@ Route::middleware('auth')->group(function () {
     Route::patch('/documents/{document}', [ProjectController::class, 'updateDocument'])->name('documents.update');
     Route::post('/documents/{document}/toggle-lock', [ProjectController::class, 'toggleLock'])->name('documents.toggle-lock');
     Route::post('/revisions/{revision}/note', [ProjectController::class, 'addRevisionNote'])->name('revisions.note');
+    Route::post('/revisions/{revision}/markups', [ProjectController::class, 'storeRevisionMarkups'])->name('revisions.markups');
     Route::post('/notes/{note}/update', [ProjectController::class, 'updateRevisionNote'])->name('notes.update');
     Route::post('/notes/{note}/toggle-resolve', [ProjectController::class, 'toggleResolveNote'])->name('notes.toggle-resolve');
     Route::get('/transmittals/{transmittal}/download', [\App\Http\Controllers\TransmittalPDFController::class, 'download'])->name('transmittals.download');

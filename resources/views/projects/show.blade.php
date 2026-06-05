@@ -7,6 +7,201 @@
 <meta name="csrf-token" content="{{ csrf_token() }}">
 
 <style>
+    .project-control-layout {
+        display: grid;
+        grid-template-columns: 240px minmax(0, 1fr);
+        height: calc(100vh - 4rem);
+        gap: 1.25rem;
+    }
+
+    .project-main-workspace {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        min-width: 0;
+        overflow: hidden;
+    }
+
+    .project-header {
+        align-items: flex-start;
+        gap: 1rem;
+        margin-bottom: 0;
+    }
+
+    .project-header h1 {
+        font-size: clamp(1.45rem, 1.6vw, 1.8rem);
+        letter-spacing: -0.03em;
+        line-height: 1.05;
+        color: var(--text-main);
+        overflow-wrap: anywhere;
+    }
+
+    .project-actions {
+        display: flex;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+    }
+
+    .project-actions .btn-modern {
+        min-height: 40px;
+        padding: 0.62rem 1.05rem;
+        border-radius: 12px;
+        white-space: nowrap;
+        box-shadow: none;
+    }
+
+    .project-summary {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0;
+        padding: 0;
+        overflow: hidden;
+    }
+
+    .project-summary-item {
+        min-width: 0;
+        padding: 1rem 1.15rem;
+        border-right: 1px solid var(--border);
+    }
+
+    .project-summary-item:last-child { border-right: 0; }
+
+    .project-summary-label {
+        font-size: 0.65rem;
+        color: var(--text-muted);
+        font-weight: 800;
+        text-transform: uppercase;
+    }
+
+    .project-summary-value {
+        margin-top: 0.25rem;
+        font-size: 0.86rem;
+        color: var(--text-main);
+        font-weight: 800;
+        overflow-wrap: anywhere;
+    }
+
+    .project-breadcrumb {
+        background: #f8fafc;
+        padding: 0.75rem 1.1rem;
+        border: 1px solid var(--border);
+        border-radius: 12px 12px 0 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.75rem;
+        font-weight: 800;
+        color: var(--text-muted);
+    }
+
+    .project-table-card {
+        padding: 0;
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        border-radius: 0 0 12px 12px;
+        border-top: none;
+    }
+
+    .project-doc-grid {
+        min-width: 1180px;
+    }
+
+    .project-doc-grid .doc-row {
+        grid-template-columns: 44px minmax(120px, 0.8fr) minmax(300px, 2.1fr) 96px 76px 126px minmax(170px, 0.95fr) 92px;
+        gap: 0.85rem;
+        padding: 1rem 1.15rem;
+        min-height: 66px;
+    }
+
+    .project-doc-grid .header-row {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        min-height: 52px;
+        background: #f8fafc;
+        color: #475569;
+        font-size: 0.72rem;
+        font-weight: 900;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        cursor: default;
+    }
+
+    .project-doc-grid .doc-row:not(.header-row):hover {
+        background: #f8fafc;
+    }
+
+    .doc-number-cell {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        min-width: 0;
+        font-family: monospace;
+        color: var(--primary);
+        font-weight: 800;
+    }
+
+    .doc-number-text,
+    .doc-title-main,
+    .doc-file-name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .doc-title-main {
+        color: #1e293b;
+        font-weight: 800;
+        line-height: 1.2;
+    }
+
+    .doc-file-name {
+        margin-top: 0.2rem;
+        color: var(--text-muted);
+        font-size: 0.68rem;
+    }
+
+    .revision-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 2rem;
+        max-width: 100%;
+        padding: 0.28rem 0.55rem;
+        border-radius: 7px;
+        background: #eef2ff;
+        color: #312e81;
+        font-weight: 900;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .renewal-cell {
+        min-width: 0;
+        display: flex;
+        justify-content: flex-start;
+    }
+
+    .renewal-pill {
+        max-width: 100%;
+        border-radius: 8px;
+        line-height: 1.15;
+        white-space: normal;
+        text-transform: none;
+        letter-spacing: 0;
+    }
+
+    .doc-actions {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 0.35rem;
+    }
+
     .modal-overlay {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(8px);
@@ -33,9 +228,46 @@
     .doc-row[draggable="true"]:active { cursor: grabbing; transform: scale(0.98); opacity: 0.8; }
     .folder-item.drag-over { background: var(--primary) !important; color: white !important; transform: scale(1.05); }
     .folder-item.drag-over svg { stroke: white !important; }
+
+    @media (max-width: 1200px) {
+        .project-control-layout {
+            grid-template-columns: 1fr;
+            height: auto;
+        }
+
+        .project-control-layout > aside {
+            height: auto !important;
+            max-height: 260px;
+        }
+
+        .project-main-workspace {
+            overflow: visible;
+        }
+
+        .project-table-card {
+            max-height: 70vh;
+        }
+
+        .project-header {
+            flex-direction: column;
+        }
+
+        .project-actions {
+            justify-content: flex-start;
+        }
+    }
+
+    @media (max-width: 760px) {
+        .project-summary {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .project-summary-item:nth-child(2n) { border-right: 0; }
+        .project-summary-item:nth-child(n + 3) { border-top: 1px solid var(--border); }
+    }
 </style>
 
-<div class="control-layout" style="display: grid; grid-template-columns: 240px 1fr; height: calc(100vh - 4rem); gap: 1.5rem;">
+<div class="control-layout project-control-layout">
     
     <!-- Sidebar: Virtual Folders -->
     <aside class="glass-card" style="padding: 1.5rem; height: 100%; overflow-y: auto;">
@@ -97,13 +329,13 @@
     </aside>
 
     <!-- Main Workspace -->
-    <div style="display: flex; flex-direction: column; gap: 1.5rem; overflow: hidden;">
-        <div class="top-header" style="margin-bottom: 0;">
+    <div class="project-main-workspace">
+        <div class="top-header project-header">
             <div>
-                <h1 style="font-size: 1.75rem; letter-spacing: -1px; color: #0f172a;">{{ $project->name }}</h1>
+                <h1>{{ $project->name }}</h1>
                 <p style="color: var(--text-muted); font-size: 0.8rem; font-weight: 600;">CENTRO DE CONTROL DOCUMENTAL • {{ $project->code }}</p>
             </div>
-            <div style="display: flex; gap: 0.75rem;">
+            <div class="project-actions">
                 <a href="{{ route('projects.dashboard', $project->id) }}" class="btn-modern" style="background: white; border: 1px solid var(--border); color: var(--text-main); box-shadow: none;">Dashboard</a>
                 <a href="{{ route('workflows.index') }}" class="btn-modern" style="background: white; border: 1px solid var(--border); color: var(--text-main); box-shadow: none;">Catálogo de Flujos</a>
                 <a href="{{ route('projects.transmittals', $project->id) }}" class="btn-modern" style="background: white; border: 1px solid var(--border); color: var(--text-main); box-shadow: none;">Historial Transmittals</a>
@@ -156,22 +388,22 @@
                 'critica' => 'Crítica',
             ];
         @endphp
-        <div class="glass-card" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; padding: 1rem 1.25rem;">
-            <div>
-                <div style="font-size: 0.65rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase;">Responsable</div>
-                <div style="font-size: 0.85rem; color: var(--text-main); font-weight: 800; margin-top: 0.25rem;">{{ $project->owner->name ?? 'Sin asignar' }}</div>
+        <div class="glass-card project-summary">
+            <div class="project-summary-item">
+                <div class="project-summary-label">Responsable</div>
+                <div class="project-summary-value">{{ $project->owner->name ?? 'Sin asignar' }}</div>
             </div>
-            <div>
-                <div style="font-size: 0.65rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase;">Obra</div>
-                <div style="font-size: 0.85rem; color: var(--text-main); font-weight: 800; margin-top: 0.25rem;">{{ $project->construction_location ?? 'Sin ubicación' }}</div>
+            <div class="project-summary-item">
+                <div class="project-summary-label">Obra</div>
+                <div class="project-summary-value">{{ $project->construction_location ?? 'Sin ubicación' }}</div>
             </div>
-            <div>
-                <div style="font-size: 0.65rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase;">Etapa</div>
-                <div style="font-size: 0.85rem; color: var(--text-main); font-weight: 800; margin-top: 0.25rem;">{{ $stageLabels[$project->project_stage] ?? 'Por definir' }}</div>
+            <div class="project-summary-item">
+                <div class="project-summary-label">Etapa</div>
+                <div class="project-summary-value">{{ $stageLabels[$project->project_stage] ?? 'Por definir' }}</div>
             </div>
-            <div>
-                <div style="font-size: 0.65rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase;">Objetivo</div>
-                <div style="font-size: 0.85rem; color: var(--text-main); font-weight: 800; margin-top: 0.25rem;">
+            <div class="project-summary-item">
+                <div class="project-summary-label">Objetivo</div>
+                <div class="project-summary-value">
                     {{ $project->target_date ? $project->target_date->format('d/m/Y') : 'Sin fecha' }}
                     @if($project->priority_level)
                         <span class="status-pill pill-{{ $project->priority_level === 'critica' || $project->priority_level === 'alta' ? 'draft' : ($project->priority_level === 'media' ? 'review' : 'approved') }}" style="margin-left: 0.5rem;">{{ $priorityLabels[$project->priority_level] }}</span>
@@ -180,16 +412,16 @@
             </div>
         </div>
 
-        <div id="breadcrumb" style="background: #f8fafc; padding: 0.75rem 1.25rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; font-weight: 700; color: var(--text-muted);">
+        <div id="breadcrumb" class="project-breadcrumb">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
             <span id="bcRoot">Todos los documentos</span>
         </div>
 
-        <div class="glass-card" style="padding: 0; flex: 1; overflow-y: auto; border-radius: 0 0 12px 12px; border-top: none;">
+        <div class="glass-card project-table-card">
             <form id="bulkForm" action="{{ route('projects.transmittals.send', $project->id) }}" method="POST">
                 @csrf
-                <div class="data-grid">
-                    <div class="doc-row header-row" style="position: sticky; top: 0; background: #f8fafc; z-index: 10; grid-template-columns: 40px 140px 2fr 120px 80px 120px 96px;">
+                <div class="data-grid project-doc-grid">
+                    <div class="doc-row header-row">
                         <div style="text-align: center;"><input type="checkbox" onclick="toggleAll(this)"></div>
                         <div>ID TÉCNICO</div>
                         <div>TÍTULO DEL DOCUMENTO</div>
@@ -197,6 +429,7 @@
                         <div>REV</div>
                         <div>ESTADO</div>
                         <div>RENOVACIÓN</div>
+                        <div style="text-align: right;">ACCIONES</div>
                     </div>
 
                     <!-- FOLDERS IN MAIN GRID -->
@@ -205,14 +438,15 @@
                         <div class="doc-row folder-row" 
                              data-discipline="{{ $d->name }}" 
                              data-folder-id-parent=""
-                             style="grid-template-columns: 40px 140px 2fr 120px 80px 120px 96px; background: #f1f5f9; display: none;"
+                             style="background: #f1f5f9; display: none;"
                              onclick="filterByFolder('{{ $f->id }}', document.querySelector('.folder-item[data-folder-id=\'{{ $f->id }}\']'))">
                             <div style="text-align: center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="#64748b" stroke="none"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></div>
                             <div style="font-weight: 800; color: #64748b; font-size: 0.7rem;">CARPETA</div>
                             <div style="font-weight: 800; color: #1e293b;">{{ $f->name }}</div>
                             <div style="font-size: 0.75rem; font-weight: 600;">{{ $d->prefix }}</div>
                             <div style="text-align: center;">-</div>
-                            <div style="text-align: center;">-</div>
+                            <div style="color: #94a3b8; font-weight: 800;">-</div>
+                            <div style="color: #94a3b8; font-weight: 800;">-</div>
                             <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
                                 <button onclick="event.stopPropagation(); openRenameFolderModal('{{ $f->id }}', '{{ $f->name }}')" class="btn-tool" style="font-size: 0.8rem;" title="Renombrar">✏️</button>
                                 <button onclick="event.stopPropagation(); deleteFolder('{{ $f->id }}')" class="btn-tool" style="font-size: 0.8rem; color: #ef4444;" title="Eliminar">🗑️</button>
@@ -238,36 +472,37 @@
                          data-doc-id="{{ $doc->id }}"
                          data-discipline="{{ $doc->discipline->name }}" 
                          data-folder-id="{{ $doc->folder_id ?? '' }}"
-                         style="grid-template-columns: 40px 140px 2fr 120px 80px 120px 96px;" 
                          onclick="window.open('{{ route('documents.viewer', $doc->id) }}', '_blank', 'noopener')"
                          ondragstart="onDragStart(event)">
                         <div style="text-align: center;" onclick="event.stopPropagation()"><input type="checkbox" name="document_ids[]" value="{{ $doc->id }}" onchange="updateBulkUI()"></div>
-                        <div style="font-family: monospace; color: var(--primary); font-weight: 700;">
+                        <div class="doc-number-cell">
                             @if($doc->is_locked)<span style="color:#ef4444;" title="Bloqueado por aprobación">🔒</span>@endif
                             @if($doc->confidentiality_level === 'internal')<span style="color:#eab308; margin-right:4px;" title="Interno">🛡️</span>@endif
                             @if($doc->confidentiality_level === 'restricted')<span style="color:#f97316; margin-right:4px;" title="Restringido">⚠️</span>@endif
                             @if($doc->confidentiality_level === 'confidential')<span style="color:#dc2626; margin-right:4px;" title="Confidencial">🛑</span>@endif
-                            {{ $doc->document_number }}
+                            <span class="doc-number-text">{{ $doc->document_number }}</span>
                         </div>
                         <div>
-                            <div style="font-weight: 700; color: #1e293b;">{{ $doc->title }}</div>
-                            <div style="font-size: 0.65rem; color: var(--text-muted);">{{ $v->original_name ?? 'N/A' }}</div>
+                            <div class="doc-title-main">{{ $doc->title }}</div>
+                            <div class="doc-file-name">{{ $v->original_name ?? 'N/A' }}</div>
                         </div>
                         <div style="font-size: 0.75rem; font-weight: 600;">{{ $doc->discipline->prefix }}</div>
-                        <div style="text-align: center;"><span style="background: #eef2ff; padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 800;">{{ $v->revision_code ?? '-' }}</span></div>
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="text-align: center;"><span class="revision-badge">{{ $v->revision_code ?? '-' }}</span></div>
+                        <div>
                             <span class="status-pill pill-{{ str_contains($v->status ?? '', 'Approved') ? 'approved' : (str_contains($v->status ?? '', 'Review') ? 'review' : 'draft') }}">
                                 {{ $v->status ?? 'Draft' }}
                             </span>
                         </div>
-                        <div style="display: flex; justify-content: flex-end; align-items: center; gap: 0.35rem;">
+                        <div class="renewal-cell">
                             @if($doc->is_renewable)
-                                <span class="status-pill pill-{{ $doc->renewal_due_date && $doc->renewal_due_date->isPast() ? 'draft' : 'review' }}" title="Renovar {{ $doc->renewal_due_date ? $doc->renewal_due_date->format('d/m/Y') : 'sin fecha' }}">
+                                <span class="status-pill renewal-pill pill-{{ $doc->renewal_due_date && $doc->renewal_due_date->isPast() ? 'draft' : 'review' }}" title="Renovar {{ $doc->renewal_due_date ? $doc->renewal_due_date->format('d/m/Y') : 'sin fecha' }}">
                                     {{ $renewalRule }} · prox. {{ $doc->renewal_due_date ? $doc->renewal_due_date->format('d/m/Y') : 'sin fecha' }}
                                 </span>
                             @else
                                 <span style="font-size: 0.7rem; color: #94a3b8; font-weight: 700;">No</span>
                             @endif
+                        </div>
+                        <div class="doc-actions">
                             <a href="{{ route('documents.edit', $doc->id) }}" onclick="event.stopPropagation();" class="btn-tool" style="font-size: 0.8rem; color: var(--primary); text-decoration: none;" title="Editar Documento">✏️</a>
                             <button onclick="event.stopPropagation(); deleteDocument('{{ $doc->id }}')" class="btn-tool" style="font-size: 0.8rem; color: #ef4444;" title="Eliminar Documento">🗑️</button>
                         </div>
@@ -798,8 +1033,8 @@
         });
     }
 
-    function filterDiscipline(discipline, element) {
-        event.preventDefault();
+    function filterDiscipline(discipline, element, evt = window.event) {
+        evt?.preventDefault();
         resetActiveFilters();
         element.classList.add('active');
         element.style.background = '#eef2ff';
@@ -830,8 +1065,8 @@
         });
     }
 
-    function filterByFolder(folderId, element) {
-        event.preventDefault();
+    function filterByFolder(folderId, element, evt = window.event) {
+        evt?.preventDefault();
         resetActiveFilters();
         element.classList.add('active');
         element.style.background = '#eef2ff';
