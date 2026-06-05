@@ -98,7 +98,7 @@
 
 <div class="top-header">
     <div>
-        <h1 style="font-size: 2.5rem; letter-spacing: -2px; color: var(--text-main);">Centro de <span style="color: var(--primary)">Trabajo</span></h1>
+        <h1 style="font-size: 2.5rem; letter-spacing: -2px; color: var(--text-main);">Bóveda de <span style="color: var(--primary)">Información</span></h1>
         <p style="color: var(--text-muted); font-weight: 600;">Pendientes, notificaciones y proyectos en un solo lugar.</p>
     </div>
     <a class="btn-modern" href="{{ route('projects.create') }}">
